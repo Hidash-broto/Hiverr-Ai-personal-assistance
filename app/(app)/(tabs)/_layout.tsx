@@ -35,7 +35,6 @@ export default function TabLayout() {
       />
       <Tabs.Screen
         name="tasks"
-        // component={TaskListing}
         options={{
           title: 'Tasks',
           tabBarIcon: ({ color }) => <IconSymbol size={28} name="list.bullet" color={color} />,
