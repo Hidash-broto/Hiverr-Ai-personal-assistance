@@ -1,6 +1,7 @@
 import { Tabs } from 'expo-router';
 import React from 'react';
 import { Platform, Pressable } from 'react-native';
+import { useRouter } from 'expo-router'
 
 import { HapticTab } from '@/components/HapticTab';
 import { IconSymbol } from '@/components/ui/IconSymbol';
@@ -10,6 +11,7 @@ import { useColorScheme } from '@/hooks/useColorScheme';
 
 export default function TabLayout() {
   const colorScheme = useColorScheme();
+  const redirect = useRouter();
 
   return (
     <Tabs
@@ -39,16 +41,16 @@ export default function TabLayout() {
           title: 'Tasks',
           tabBarIcon: ({ color }) => <IconSymbol size={28} name="list.bullet" color={color} />,
           headerRight: () => (
-              <Pressable style={{ marginRight: 15 }} onPress={() => alert('Add button pressed!')}>
-                {({ pressed }) => (
-                  <IconSymbol
-                    size={28}
-                    name="plus"
-                    color={pressed ? Colors[colorScheme ?? 'light'].tint : Colors[colorScheme ?? 'light'].text}
-                  />
-                )}
-              </Pressable>
-            ),
+            <Pressable style={{ marginRight: 15 }} onPress={() => redirect.replace('/(app)/(screens)/create-task')}>
+              {({ pressed }) => (
+                <IconSymbol
+                  size={28}
+                  name="plus"
+                  color={pressed ? Colors[colorScheme ?? 'light'].tint : Colors[colorScheme ?? 'light'].text}
+                />
+              )}
+            </Pressable>
+          ),
         }}
       />
       <Tabs.Screen
@@ -73,6 +75,6 @@ export default function TabLayout() {
         }}
       />
     </Tabs>
-    
+
   );
 }

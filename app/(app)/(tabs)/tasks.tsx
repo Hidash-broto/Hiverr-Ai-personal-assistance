@@ -1,26 +1,22 @@
 import React, { useEffect, useState } from 'react'
-import { Text, View, FlatList, Pressable, Modal, TouchableWithoutFeedback, TouchableOpacity, StyleSheet, Dimensions } from 'react-native'
-import { getTasks, deleteTask } from '@/services/task-services'
+import { Text, View, FlatList, Pressable, StyleSheet, Dimensions } from 'react-native'
+import { getTasks } from '@/services/task-services'
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { IconSymbol } from '@/components/ui/IconSymbol';
-import Toast from 'react-native-toast-message';
 import StatusModal from '@/components/task-components/StatusModal';
 import { TaskTypes } from '@/constants/types';
-import PrioritySelectModal from '@/components/task-components/PrioritySelectModal';
 import MoreOptionsModal from '@/components/task-components/MoreOptionsModal';
 
-const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
+const { height: screenHeight } = Dimensions.get('window');
 
 function TaskListing() {
   const [tasks, setTasks] = useState<TaskTypes[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [statusModal, setStatusModal] = useState<boolean>(false)
   const [selectedTask, setSelectedTask] = useState<TaskTypes | null>(null);
-  const [priorityModal, setPriorityModal] = useState(false);
   const [moreOptionsModal, setMoreOptionsModal] = useState(false);
   const [reRender, setReRender] = useState(false);
   const [buttonPosition, setButtonPosition] = useState({ x: 0, y: 0, width: 0, height: 0 })
-  const [nestedPopupPosition, setNestedPopupPosition] = useState({ x: 0, y: 0, width: 0, height: 0 })
 
   useEffect(() => {
     const fetchData = async () => {
@@ -100,22 +96,12 @@ function TaskListing() {
         reRender={reRender}
         setReRender={setReRender}
       />
-      { /* menuOptions Modal */}
-      <PrioritySelectModal
-        priorityModal={priorityModal}
-        setPriorityModal={setPriorityModal}
-        selectedTask={selectedTask}
-        setReRender={setReRender}
-        buttonPosition={nestedPopupPosition}
-      />
       <MoreOptionsModal
         moreOptionsModal={moreOptionsModal}
         setMoreOptionsModal={setMoreOptionsModal}
         selectedTask={selectedTask}
         setReRender={setReRender}
         buttonPosition={buttonPosition}
-        setPriorityModal={setPriorityModal}
-        setNestedPopupPosition={setNestedPopupPosition}
       />
     </View >
   )
