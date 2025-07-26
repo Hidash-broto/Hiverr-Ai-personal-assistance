@@ -1,10 +1,11 @@
 import { TaskTypes } from '@/constants/types';
 import { deleteTask, updateTask } from '@/services/task-services';
 import React from 'react'
-import { Dimensions, FlatList, Modal, Pressable, StyleSheet, Text, TouchableOpacity, TouchableWithoutFeedback, View } from 'react-native';
+import { Alert, Dimensions, FlatList, Modal, Pressable, StyleSheet, Text, TouchableOpacity, TouchableWithoutFeedback, View } from 'react-native';
 import Toast from 'react-native-toast-message';
 import CollapsibleListItem from '../CollapsibleListItem';
 import { MaterialIcons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router'
 
 const { width: screenWidth } = Dimensions.get('window');
 
@@ -13,32 +14,36 @@ function MoreOptionsModal(
         : { moreOptionsModal: boolean, setMoreOptionsModal: React.Dispatch<React.SetStateAction<boolean>>, selectedTask: TaskTypes | null, setReRender: React.Dispatch<React.SetStateAction<boolean>>, buttonPosition: { x: number, y: number, width: number, height: number } }
 ) {
 
+    const router = useRouter();
+
     const handleOptionClick = async (item: { label: string, value: string }, event) => {
         if (item.value === 'edit') {
-            Toast.show({
-                type: 'info',
-                text1: 'This feature is coming soon!',
-                autoHide: true,
-            });
-        } else if (item.value === 'delete') {
+            setMoreOptionsModal(false);
             if (selectedTask && selectedTask._id) {
-                const res = await deleteTask(selectedTask._id);
-                if (res.status) {
-                    Toast.show({
-                        type: 'success',
-                        text1: 'Task deleted successfully',
-                        autoHide: true,
-                    });
-                    setMoreOptionsModal(false);
-                    setReRender((prev) => !prev);
-                } else {
-                    Toast.show({
-                        type: 'error',
-                        text1: 'Something went wrong',
-                        autoHide: true,
-                    });
-                }
+                router.push(`/create-task?taskId=${selectedTask._id}`);
+            } else {
+                Toast.show({
+                    type: 'error',
+                    text1: 'Something went wrong',
+                    autoHide: true,
+                });
             }
+        } else if (item.value === 'delete') {
+            Alert.alert(
+                'Delete Task',
+                'Are you sure you want to delete this task?',
+                [
+                    {
+                        text: 'Cancel',
+                        style: 'cancel',
+                    },
+                    {
+                        text: 'Delete',
+                        onPress: handleDelete,
+                        style: 'destructive',
+                    },
+                ]
+            )
         }
     }
 
@@ -61,6 +66,33 @@ function MoreOptionsModal(
                 return (<MaterialIcons name="keyboard-arrow-down" size={24} color="gray" />);
             default:
                 return (<MaterialIcons name="help-outline" size={24} color="gray" />);
+        }
+    }
+
+    const handleDelete = async () => {
+        if (selectedTask && selectedTask._id) {
+            const res = await deleteTask(selectedTask._id);
+            if (res.status) {
+                Toast.show({
+                    type: 'success',
+                    text1: 'Task deleted successfully',
+                    autoHide: true,
+                });
+                setMoreOptionsModal(false);
+                setReRender((prev) => !prev);
+            } else {
+                Toast.show({
+                    type: 'error',
+                    text1: 'Something went wrong',
+                    autoHide: true,
+                });
+            }
+        } else {
+            Toast.show({
+                type: 'error',
+                text1: 'Something went wrong',
+                autoHide: true,
+            });
         }
     }
 

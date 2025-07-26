@@ -2,9 +2,9 @@ import { TaskTypes } from "@/constants/types";
 import axiosConnection from "@/utils/axiosConnection"
 import Toast from "react-native-toast-message";
 
-export const getTasks = async () => {
+export const getTasks = async (query: string = '', priority: string = '', status: string = '') => {
     try {
-        const response = await axiosConnection.get('/tasks');
+        const response = await axiosConnection.get(`/tasks?query=${query}&priority=${priority}&status=${status}`);
         return response.data;
     } catch (error) {
         console.log(error);
@@ -43,9 +43,23 @@ export const deleteTask = async (id) => {
     }
 }
 
-export const createTask = async (task) => {
+export const createTask = async (task: any) => {
     try {
         const response = await axiosConnection.post('/tasks', task);
+        return response.data;
+    } catch (error) {
+        console.log(error);
+        Toast.show({
+            type: 'error',
+            text1: 'Something went wrong, please try again later',
+            autoHide: true,
+        })
+    }
+}
+
+export const getTaskById = async (id: string | string[]) => {
+    try {
+        const response = await axiosConnection.get(`/tasks/${id}`);
         return response.data;
     } catch (error) {
         console.log(error);

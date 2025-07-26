@@ -1,11 +1,12 @@
 import React, { useEffect, useState } from 'react'
-import { Text, View, FlatList, Pressable, StyleSheet, Dimensions } from 'react-native'
+import { Text, View, FlatList, Pressable, StyleSheet, Dimensions, TextInput } from 'react-native'
 import { getTasks } from '@/services/task-services'
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { IconSymbol } from '@/components/ui/IconSymbol';
 import StatusModal from '@/components/task-components/StatusModal';
 import { TaskTypes } from '@/constants/types';
 import MoreOptionsModal from '@/components/task-components/MoreOptionsModal';
+import FilterModal from '@/components/task-components/FilterModal';
 
 const { height: screenHeight } = Dimensions.get('window');
 
@@ -17,6 +18,11 @@ function TaskListing() {
   const [moreOptionsModal, setMoreOptionsModal] = useState(false);
   const [reRender, setReRender] = useState(false);
   const [buttonPosition, setButtonPosition] = useState({ x: 0, y: 0, width: 0, height: 0 })
+  const [searchQuery, setSearchQuery] = useState('');
+  const [priorityFilter, setPriorityFilter] = useState<{ label: string, value: string }>({ label: 'All', value: 'all' });
+  const [statusFilter, setStatusFilter] = useState<{ label: string, value: string }>({ label: 'All', value: 'all' });
+  const [filterModalVisible, setFilterModalVisible] = useState(false);
+  const [currentFilterType, setCurrentFilterType] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -48,8 +54,50 @@ function TaskListing() {
     }
   }
 
+  useEffect(() => {
+    const debouncedSearch = setTimeout(async () => {
+      setLoading(true);
+      const response = await getTasks(searchQuery, priorityFilter?.value, statusFilter?.value);
+      if (response?.status) {
+        setTasks(response?.tasks);
+      }
+      setLoading(false);
+    }, 300);
+    return () => clearTimeout(debouncedSearch);
+  }, [searchQuery, priorityFilter, statusFilter]);
+
+  const renderFilterModal = (modalType: string) => {
+    setCurrentFilterType(modalType);
+    setFilterModalVisible(true);
+  }
+
   return (
     <View style={{ padding: 6, display: 'flex', flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+      <View style={{ width: '100%', marginBottom: 10, display: 'flex', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+        <TextInput
+          style={{ height: 40, paddingHorizontal: 10, borderRadius: 5, width: '47%', marginBottom: 10, backgroundColor: '#ffffff', marginTop: 10 }}
+          placeholder="Search tasks..."
+          onChangeText={(text) => setSearchQuery(text)}
+        />
+        <View style={{ flexDirection: 'row', alignItems: 'center', width: '50%', justifyContent: 'space-between', paddingHorizontal: 10 }}>
+          <Pressable
+            onPress={() => {
+              renderFilterModal('status')
+            }}
+            style={{ borderRadius: 5, padding: 5, width: '47%', height: 40, backgroundColor: '#ffffffff', display: 'flex', flexDirection: 'row', justifyContent: 'center', alignItems: 'center' }}
+          >
+            <Text style={styles.dropdownTriggerText}>{statusFilter?.label}</Text>
+          </Pressable>
+          <Pressable
+            onPress={() => {
+              renderFilterModal('priority')
+            }}
+            style={{ borderRadius: 5, padding: 5, width: '47%', height: 40, backgroundColor: '#ffffffff', display: 'flex', flexDirection: 'row', justifyContent: 'center', alignItems: 'center' }}
+          >
+            <Text style={styles.dropdownTriggerText}>{priorityFilter?.label}</Text>
+          </Pressable>
+        </View>
+      </View>
       {loading && <Text>Loading...</Text>}
       {!loading && tasks.length === 0 && <Text>No tasks available.</Text>}
       <FlatList
@@ -103,6 +151,30 @@ function TaskListing() {
         setReRender={setReRender}
         buttonPosition={buttonPosition}
       />
+
+      {filterModalVisible && (
+        <FilterModal
+          setValue={currentFilterType === 'priority' ? setPriorityFilter : setStatusFilter}
+          setVisible={() => setFilterModalVisible(false)}
+          values={
+            currentFilterType === 'priority'
+              ? [
+                { value: 'all', label: 'All' },
+                { value: 'low', label: 'Low' },
+                { value: 'medium', label: 'Medium' },
+                { value: 'high', label: 'High' }
+              ]
+              : [
+                { value: 'all', label: 'All' },
+                { value: 'open', label: 'Open' },
+                { value: 'in_progress', label: 'In Progress' },
+                { value: 'closed', label: 'Closed' }
+              ]
+          }
+          visible={!!filterModalVisible}
+          loading={loading}
+        />
+      )}
     </View >
   )
 }

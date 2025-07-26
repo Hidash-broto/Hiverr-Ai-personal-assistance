@@ -4,5 +4,6 @@ export interface TaskTypes {
   status: string,
   user: { name: string, email: string },
   priority: string,
+  dueDate: Date | null,
   _id: string
 }
