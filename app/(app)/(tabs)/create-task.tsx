@@ -29,7 +29,6 @@ function CreateTask() {
     priority: 'medium',
   });
 
-
   // To get query params in Expo Router, use useLocalSearchParams
   const params = useLocalSearchParams();
   const taskId: string | undefined | any = params.taskId;
