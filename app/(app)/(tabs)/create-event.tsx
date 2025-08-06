@@ -1,12 +1,13 @@
-import { CreateEventProps } from '@/constants/types';
+import { Contact, CreateEventProps } from '@/constants/types';
 import { Formik } from 'formik';
 // import React from 'react'
-import { Keyboard, KeyboardAvoidingView, Platform, ScrollView, Text, TextInput, TouchableOpacity, TouchableWithoutFeedback, View } from 'react-native'
+import { Alert, Keyboard, KeyboardAvoidingView, Platform, ScrollView, Text, TextInput, TouchableOpacity, TouchableWithoutFeedback, View } from 'react-native'
 import * as Yup from 'yup';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { GooglePlacesAutocomplete } from 'react-native-google-places-autocomplete';
-import { useState } from 'react';
-
+import { useEffect, useState } from 'react';
+import * as Contacts from 'expo-contacts';
+import { getAllContacts } from '@/services/user';
 
 function CreateEvent() {
     const [attendeesList, setAttendeesList] = useState<string[]>([]);
@@ -22,6 +23,52 @@ function CreateEvent() {
         },
         attendees: [],
     });
+    const [contacts, setContacts] = useState<Contact[]>([]);
+    const [contactPermissionGranted, setContactPermissionGranted] = useState(false);
+
+    useEffect(() => {
+        (async () => {
+            // Check for contact permissions
+            const { status } = await Contacts.requestPermissionsAsync();
+            setContactPermissionGranted(status === 'granted');
+
+            if (status !== 'granted') {
+                Alert.alert('Permission to access contacts was denied. Please enable it in settings.');
+            }
+        })()
+    }, []);
+
+    const loadContacts = async () => {
+        if (!contactPermissionGranted) {
+            Alert.alert('Cannot load contacts: Permission not granted.');
+            return;
+        }
+
+        try {
+            const { data } = await Contacts.getContactsAsync({
+                fields: [
+                    Contacts.Fields.PhoneNumbers,
+                    // You can add more fields if required, e.g., Contacts.Fields.Addresses
+                ],
+            });
+
+            if (data.length > 0) {
+                // Filter out contacts that might not have a name for cleaner display
+                const validContacts: string[] = data
+                    .map(contact => contact?.phoneNumbers);
+                const response = await getAllContacts(validContacts);
+                if (response.status) {
+                    setContacts(response?.users || []);
+                }
+                console.log(validContacts);
+            } else {
+                Alert.alert('No contacts found on this device.');
+            }
+        } catch (err) {
+            console.error('Error fetching contacts:', err);
+            Alert.alert('Failed to fetch contacts. Please try again.');
+        }
+    };
 
     const validationSchema = Yup.object().shape({
         title: Yup.string().required('Title is required'),
@@ -30,16 +77,17 @@ function CreateEvent() {
         endTime: Yup.date()
             .min(Yup.ref('startTime'), 'End time must be after start time')
             .required('End time is required'),
-        location: Yup.object().shape({
-            address: Yup.string().required('Location is required'),
-            latitude: Yup.number().required(),
-            longitude: Yup.number().required(),
-        }),
+        // location: Yup.object().shape({
+        //     address: Yup.string().required('Location is required'),
+        //     latitude: Yup.number().required(),
+        //     longitude: Yup.number().required(),
+        // }),
         attendees: Yup.array().of(Yup.string().email('Invalid email')),
     })
 
     const handleSubmit = async (values: CreateEventProps, { resetForm, setSubmitting }) => {
         try {
+            console.log(values, 'values');
             // Example: await api.createEvent(values);
             alert('Event created!');
             resetForm();
@@ -51,7 +99,6 @@ function CreateEvent() {
     }
 
     const mapKey = process.env.EXPO_PUBLIC_MAP_API_KEY;
-    console.log(mapKey, 'mapKey');
 
     return (
         <KeyboardAvoidingView
@@ -76,6 +123,7 @@ function CreateEvent() {
                     isSubmitting,
                 }) => (
                     <View style={{ flex: 1, padding: 16 }}>
+                        {/* <Text>{JSON.stringify(errors)}</Text> */}
                         <Text style={{ fontSize: 24, fontWeight: 'bold', marginBottom: 16 }}>Create Event</Text>
                         <Text>Title</Text>
                         <TextInput
@@ -129,7 +177,7 @@ function CreateEvent() {
                             <Text style={{ color: 'red', marginBottom: 8 }}>{errors.endTime as string}</Text>
                         )}
 
-                        <Text>Location</Text>
+                        {/* <Text>Location</Text>
                         <View style={{ marginBottom: 50, marginTop: 10, height: 100 }}>
                             <GooglePlacesAutocomplete
                                 placeholder="Search for location"
@@ -185,7 +233,7 @@ function CreateEvent() {
                             {touched.location?.address && errors.location?.address && (
                                 <Text style={{ color: 'red', marginBottom: 8 }}>{errors.location.address}</Text>
                             )}
-                        </View>
+                        </View> */}
 
                         <Text>Attendees</Text>
                         <View style={{ borderWidth: 1, borderColor: '#ccc', borderRadius: 4, marginBottom: 4 }}>

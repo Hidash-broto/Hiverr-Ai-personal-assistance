@@ -27,3 +27,11 @@ export interface CreateEventProps {
   },
   attendees: Array<{ name: string, email: string }>
 }
+
+export interface Contact {
+  id: string;
+  name: string;
+  phoneNumbers?: { number: string; label?: string }[];
+  emails?: { email: string; label?: string }[];
+  // Add more fields if needed based on Contacts.Contact
+}
