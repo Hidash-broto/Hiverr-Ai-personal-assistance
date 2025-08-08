@@ -35,6 +35,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
     const saveToken = async (token: string) => {
         setToken(token);
         await SecureStore.setItemAsync('token', token);
+        return token;
     }
 
     const deleteToken = async () => {

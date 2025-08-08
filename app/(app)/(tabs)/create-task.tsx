@@ -1,13 +1,11 @@
-import React, { useEffect, useState } from 'react';
-import { View, Text, TextInput, StyleSheet, Pressable, Keyboard, TouchableWithoutFeedback } from 'react-native';
 import { createTask, getTaskById, updateTask } from '@/services/task-services';
-import Toast from 'react-native-toast-message';
 import { Picker } from '@react-native-picker/picker';
-// import DateTimePicker from '@react-native-community/datetimepicker';
+import { router, useLocalSearchParams } from 'expo-router';
 import { Formik } from 'formik';
+import React, { useEffect, useState } from 'react';
+import { Keyboard, Pressable, StyleSheet, Text, TextInput, TouchableWithoutFeedback, View } from 'react-native';
+import Toast from 'react-native-toast-message';
 import * as yup from 'yup';
-import { router, useRouter } from 'expo-router';
-import { useLocalSearchParams } from 'expo-router';
 
 const validationSchema = yup.object().shape({
   title: yup.string().required('Title is required'),
@@ -142,17 +140,16 @@ function CreateTask() {
 
             {/* <Text style={styles.label}>Due Date</Text>
             <View style={{ marginBottom: 15, width: '100%' }}>
-              <DateTimePicker
-                value={values.dueDate}
+              <DatePicker
+                modal
+                open={showDueDatePicker}
+                date={values.dueDate || new Date()}
                 mode="date"
-                display="default"
-                onChange={(event, selectedDate) => {
-                  const currentDate = selectedDate?.toISOString() || values.dueDate;
-                  setFieldValue('dueDate', new Date(currentDate));
+                onConfirm={date => {
+                  setFieldValue('dueDate', date);
+                  setShowDueDatePicker(false);
                 }}
-                textColor="black"
-                minimumDate={new Date()}
-                style={{ width: '100%', backgroundColor: '#fff' }}
+                onCancel={() => setShowDueDatePicker(false)}
               />
             </View> */}
 

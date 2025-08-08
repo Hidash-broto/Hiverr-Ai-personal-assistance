@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, TextInput, Pressable, ImageBackground, TouchableOpacity, TouchableWithoutFeedback, Keyboard } from 'react-native';
 import { useAuth } from '@/app/context/AuthContext';
 import { useRouter } from 'expo-router';
@@ -10,6 +10,17 @@ function Login() {
     const { saveToken } = useAuth();
     const router = useRouter();
     const [formData, setFormData] = useState({ email: '', password: '' });
+
+    // creating a useEffect for autoLogin to avoid re type input in develepment stage
+    useEffect(() => {
+        const autoLogin = async () => {
+            const token = await saveToken('eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiI2ODhiMWZiNGNmODMyNTU5NzdjNTYyOWIiLCJpYXQiOjE3NTQ1NTAzNDQsImV4cCI6MTc1NDYzNjc0NH0.dxE4pq64JBwifydrECQnA5kCuOIrTDoMHcBfhwrr9Gc');
+            if (token) {
+                router.replace('/(app)/(tabs)');
+            }
+        }
+        autoLogin();
+    }, []);
 
     const handleLogin = async () => {
         if (!formData.email.trim() || !formData.password.trim()) {

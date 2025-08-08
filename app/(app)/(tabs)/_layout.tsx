@@ -1,12 +1,13 @@
 import { Tabs, useRouter } from 'expo-router';
 import React from 'react';
-import { Platform, Pressable } from 'react-native';
+import { Platform, Pressable, View } from 'react-native';
 
 import { HapticTab } from '@/components/HapticTab';
 import { IconSymbol } from '@/components/ui/IconSymbol';
 import TabBarBackground from '@/components/ui/TabBarBackground';
 import { Colors } from '@/constants/Colors';
 import { useColorScheme } from '@/hooks/useColorScheme';
+import { MaterialIcons } from '@expo/vector-icons';
 
 export default function TabLayout() {
   const colorScheme = useColorScheme();
@@ -74,11 +75,9 @@ export default function TabLayout() {
           headerRight: () => (
             <Pressable style={{ marginRight: 15 }} onPress={() => redirect.push('/create-event')}>
               {({ pressed }) => (
-                <IconSymbol
-                  size={28}
-                  name="plus"
-                  color={pressed ? Colors[colorScheme ?? 'light'].tint : Colors[colorScheme ?? 'light'].text}
-                />
+                <View style={{ backgroundColor: 'black', width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center' }}>
+                  <MaterialIcons size={17} name="add" color='white' />
+                </View>
               )}
             </Pressable>
           ),

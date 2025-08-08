@@ -25,7 +25,7 @@ export interface CreateEventProps {
     latitude: number,
     longitude: number
   },
-  attendees: Array<{ name: string, email: string }>
+  attendees: string[]
 }
 
 export interface Contact {
