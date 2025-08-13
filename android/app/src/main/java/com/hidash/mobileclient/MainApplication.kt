@@ -1,4 +1,4 @@
-package com.hiverr
+package com.hidash.mobileclient
 
 import android.app.Application
 import android.content.res.Configuration

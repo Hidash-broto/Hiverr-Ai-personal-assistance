@@ -26,6 +26,19 @@ allprojects {
       // All of React Native (JS, Obj-C sources, Android binaries) is installed from npm
       url(reactNativeAndroidDir)
     }
+    maven {
+        url 'https://api.mapbox.com/downloads/v2/releases/maven'
+        authentication {
+            basic(BasicAuthentication)
+        }
+        credentials {
+            // Do not change the username below.
+            // This should always be `mapbox` (not your username).
+            username = "mapbox"
+            // Use the secret token you stored in gradle.properties as the password
+            password = project.properties['sk.eyJ1IjoiaGlkYXNoIiwiYSI6ImNtZHF6OXYxdTBhMjMyaXF3eW90aXhleXEifQ.sDynDK8m-upasxoCeL78jQ'] ?: ""
+        }
+    }
 
     google()
     mavenCentral()
