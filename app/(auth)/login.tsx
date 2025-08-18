@@ -14,7 +14,7 @@ function Login() {
     // creating a useEffect for autoLogin to avoid re type input in develepment stage
     useEffect(() => {
         const autoLogin = async () => {
-            const token = await saveToken('eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiI2ODhiMWZiNGNmODMyNTU5NzdjNTYyOWIiLCJpYXQiOjE3NTQ1NTAzNDQsImV4cCI6MTc1NDYzNjc0NH0.dxE4pq64JBwifydrECQnA5kCuOIrTDoMHcBfhwrr9Gc');
+            const token = await saveToken('eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiI2ODhiMWZiNGNmODMyNTU5NzdjNTYyOWIiLCJpYXQiOjE3NTU1MTY2MTYsImV4cCI6MTc1NTYwMzAxNn0.dmeIDLwOp1-yajVPHfNCq0Wv9IRSFHDvjm40LJ4NKYg');
             if (token) {
                 router.replace('/(app)/(tabs)');
             }

@@ -1,18 +1,178 @@
 import { CreateEventProps } from '@/constants/types';
-import { Formik } from 'formik';
-// import React from 'react'
+import { createEvent, getEventById, updateEvent } from '@/services/event';
 import { getAllContacts } from '@/services/user';
+import { useFocusEffect } from '@react-navigation/native';
 import MapboxGL from '@rnmapbox/maps';
 import * as Contacts from 'expo-contacts';
-import { useEffect, useState } from 'react';
-import { Alert, Dimensions, KeyboardAvoidingView, Modal, Platform, ScrollView, StatusBar, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import * as Location from 'expo-location';
+import { router, useLocalSearchParams } from 'expo-router';
+import { Formik } from 'formik';
+import { useCallback, useEffect, useState } from 'react';
+import { Alert, Dimensions, KeyboardAvoidingView, Modal, /* PermissionsAndroid, */ Platform, ScrollView, StatusBar, Text, TextInput, TouchableOpacity, View } from 'react-native';
+// import Contacts from 'react-native-contacts';
 import DatePicker from 'react-native-date-picker';
+import Toast from 'react-native-toast-message';
 import * as Yup from 'yup';
 
 // Configure Mapbox access token
-MapboxGL.setAccessToken(process.env.EXPO_PUBLIC_MAPBOX_ACCESS_TOKEN || '');
+MapboxGL.setAccessToken(process.env.EXPO_PUBLIC_MAP_API_KEY || '');
 
-const { width, height } = Dimensions.get('window');
+
+const LocationModal = ({
+    isVisible,
+    onClose,
+    onConfirm,
+    setFieldValue,
+    setSearchQuery,
+    searchQuery,
+    locationPermissionGranted,
+    userLocation,
+    selectedLocation,
+    searchLocation,
+    handleMapPress,
+    setUserLocation,
+    setSelectedLocation
+}: any) => {
+    const [renderMap, setRenderMap] = useState(false);
+    const [renderKey, setRenderKey] = useState<number | null>(null);
+
+    const handleOpen = () => {
+        setRenderKey(Date.now()); // force fresh mount
+        // render after modal fully shown to avoid ViewTagResolver crash
+        requestAnimationFrame(() => setRenderMap(true));
+    };
+
+    const handleClose = () => {
+        setRenderMap(false);
+        onClose();
+    };
+
+    return (
+        <Modal
+            visible={isVisible}
+            animationType="slide"
+            presentationStyle="pageSheet"
+            onShow={handleOpen}
+            onRequestClose={handleClose}
+        >
+            <View style={styles.modalContainer}>
+                <View style={styles.modalHeader}>
+                    <TouchableOpacity onPress={handleClose}>
+                        <Text style={styles.modalCancelText}>Cancel</Text>
+                    </TouchableOpacity>
+                    <Text style={styles.modalTitle}>Select Location</Text>
+                    <TouchableOpacity
+                        onPress={() => {
+                            if (selectedLocation) {
+                                setFieldValue('location', {
+                                    address: selectedLocation.address,
+                                    latitude: selectedLocation.coordinates[1],
+                                    longitude: selectedLocation.coordinates[0],
+                                });
+                                onConfirm();
+                            }
+                            handleClose();
+                        }}
+                    >
+                        <Text style={styles.modalConfirmText}>Done</Text>
+                    </TouchableOpacity>
+                </View>
+
+                <View style={styles.searchContainer}>
+                    <TextInput
+                        style={styles.searchInput}
+                        placeholder="Search for a location..."
+                        placeholderTextColor="#9ca3af"
+                        value={searchQuery}
+                        onChangeText={(text: string) => setSearchQuery(text)}
+                        onSubmitEditing={() => searchLocation(searchQuery)}
+                        returnKeyType="search"
+                    />
+                    <TouchableOpacity
+                        style={styles.searchButton}
+                        onPress={() => searchLocation(searchQuery)}
+                    >
+                        <Text style={styles.searchButtonText}>🔍</Text>
+                    </TouchableOpacity>
+                    {locationPermissionGranted && userLocation && (
+                        <TouchableOpacity
+                            style={styles.myLocationButton}
+                            onPress={async () => {
+                                try {
+                                    const location = await Location.getCurrentPositionAsync({
+                                        accuracy: Location.Accuracy.Balanced,
+                                    });
+                                    const coords: [number, number] = [
+                                        location.coords.longitude,
+                                        location.coords.latitude
+                                    ];
+                                    setUserLocation(coords);
+
+                                    // Reverse geocoding to get current address
+                                    const response = await fetch(
+                                        `https://api.mapbox.com/geocoding/v5/mapbox.places/${coords[0]},${coords[1]}.json?access_token=${process.env.EXPO_PUBLIC_MAP_API_KEY}`
+                                    );
+                                    const data = await response.json();
+                                    const address = data.features?.[0]?.place_name || `${coords[1].toFixed(6)}, ${coords[0].toFixed(6)}`;
+                                    setSelectedLocation({ coordinates: coords, address });
+                                } catch (error) {
+                                    console.error('Error getting current location:', error);
+                                    Alert.alert('Error', 'Failed to get current location');
+                                }
+                            }}
+                        >
+                            <Text style={styles.myLocationButtonText}>📍</Text>
+                        </TouchableOpacity>
+                    )}
+                </View>
+
+                <View style={styles.mapContainer}>
+                    {renderMap && userLocation && (
+                        <MapboxGL.MapView
+                            key={renderKey || 'map-modal'}
+                            style={styles.map}
+                            styleURL={MapboxGL.StyleURL.Street}
+                            surfaceView={true}
+                            onPress={handleMapPress}
+                        >
+                            <MapboxGL.Camera
+                                zoomLevel={14}
+                                centerCoordinate={selectedLocation?.coordinates || userLocation}
+                                animationDuration={300}
+                            />
+
+                            {locationPermissionGranted && (
+                                <MapboxGL.UserLocation visible={true} androidRenderMode="compass" />
+                            )}
+
+                            {locationPermissionGranted && (
+                                <MapboxGL.PointAnnotation id="user-location" coordinate={userLocation}>
+                                    <View style={styles.userLocationMarker}>
+                                        <View style={styles.userLocationDot} />
+                                    </View>
+                                </MapboxGL.PointAnnotation>
+                            )}
+
+                            {selectedLocation && (
+                                <MapboxGL.PointAnnotation id="selected-location" coordinate={selectedLocation.coordinates}>
+                                    <View style={styles.marker}>
+                                        <Text style={styles.markerText}>📍</Text>
+                                    </View>
+                                </MapboxGL.PointAnnotation>
+                            )}
+                        </MapboxGL.MapView>
+                    )}
+                </View>
+
+                {selectedLocation && (
+                    <View style={styles.selectedLocationInfo}>
+                        <Text style={styles.selectedLocationText}>📍 {selectedLocation.address}</Text>
+                    </View>
+                )}
+            </View>
+        </Modal>
+    );
+};
 
 function CreateEvent() {
     const [formValues, setFormValues] = useState<CreateEventProps>({
@@ -28,7 +188,6 @@ function CreateEvent() {
         attendees: [],
     });
     const [contacts, setContacts] = useState<string[]>([]);
-    const [contactPermissionGranted, setContactPermissionGranted] = useState(false);
     const [showStartPicker, setShowStartPicker] = useState(false);
     const [showEndPicker, setShowEndPicker] = useState(false);
     const [showLocationModal, setShowLocationModal] = useState(false);
@@ -37,46 +196,116 @@ function CreateEvent() {
         address: string;
     } | null>(null);
     const [searchQuery, setSearchQuery] = useState('');
+    const [userLocation, setUserLocation] = useState<[number, number] | null>(null);
+    const [locationPermissionGranted, setLocationPermissionGranted] = useState(false);
+    const [contactPermissionGranted, setContactPermissionGranted] = useState(false);
 
     useEffect(() => {
         (async () => {
-            // Check for contact permissions
-            const { status } = await Contacts.requestPermissionsAsync();
-            setContactPermissionGranted(status === 'granted');
-
-            if (status !== 'granted') {
-                Alert.alert('Permission to access contacts was denied. Please enable it in settings.');
-            } else {
-                const { data } = await Contacts.getContactsAsync({
-                    fields: [
-                        Contacts.Fields.PhoneNumbers,
-                        // You can add more fields if required, e.g., Contacts.Fields.Addresses
-                    ],
-                });
-
+            // Get location permission and user's current location (expo-location)
+            const { status } = await Location.requestForegroundPermissionsAsync();
+            if (status === 'granted') {
+                setLocationPermissionGranted(true);
                 try {
-                    if (data.length > 0) {
-                        // Filter out contacts that might not have a name for cleaner display
-                        const validContacts: string[] = data
-                            .map(contact => contact?.phoneNumbers?.[0]?.number)
-                            .filter(phoneNumber => phoneNumber !== undefined);
-                        console.log(validContacts, 'validContacts')
-                        const response = await getAllContacts(validContacts);
-                        console.log(response, 'response');
-                        if (response.status) {
-                            setContacts(response?.users || [])
-                        }
-                    } else {
-                        Alert.alert('No contacts found on this device.');
-                    }
-                } catch (err) {
-                    console.error('Error fetching contacts:', err);
-                    Alert.alert('Failed to fetch contacts. Please try again.');
+                    const location = await Location.getCurrentPositionAsync({
+                        accuracy: Location.Accuracy.Balanced,
+                    });
+                    const userCoords: [number, number] = [
+                        location.coords.longitude,
+                        location.coords.latitude
+                    ];
+                    setUserLocation(userCoords);
+                } catch (error) {
+                    console.error('Error getting current location:', error);
+                    setUserLocation([-0.1276, 51.5074]);
                 }
+            } else {
+                console.log('Location permission denied');
+                setUserLocation([-0.1276, 51.5074]);
             }
+
+            // Request contacts permission (expo-contacts)
+            await requestContactPermissions();
         })()
     }, []);
 
+    const requestContactPermissions = async () => {
+        try {
+            const { status } = await Contacts.requestPermissionsAsync();
+            if (status === 'granted') {
+                setContactPermissionGranted(true);
+                await loadContacts();
+            } else {
+                setContactPermissionGranted(false);
+                console.log('Contacts permission denied');
+                Alert.alert(
+                    'Permission Required',
+                    'Contacts permission is needed to invite people to events. You can enable it in Settings.',
+                    [{ text: 'OK' }]
+                );
+            }
+        } catch (error) {
+            console.error('Error requesting contacts permission:', error);
+            Alert.alert('Error', 'Failed to request contacts permission');
+        }
+    };
+
+    const loadContacts = async () => {
+        try {
+            const { data } = await Contacts.getContactsAsync({
+                fields: [
+                    Contacts.Fields.Emails,
+                    Contacts.Fields.PhoneNumbers,
+                    Contacts.Fields.Name,
+                ],
+                sort: Contacts.SortTypes.FirstName,
+            });
+
+            console.log(`Found ${data.length} contacts`);
+
+            if (data.length > 0) {
+                const phoneNumbers: string[] = [];
+
+                data.forEach(contact => {
+                    const numbers = contact.phoneNumbers ?? [];
+                    numbers.forEach((phone) => {
+                        if (phone.number) {
+                            const cleanNumber = phone.number.replace(/[\s\-\(\)]/g, '');
+                            if (cleanNumber.length >= 8) {
+                                phoneNumbers.push(cleanNumber);
+                            }
+                        }
+                    });
+                });
+
+                console.log(`Extracted ${phoneNumbers.length} phone numbers`);
+
+                const uniqueNumbers = [...new Set(phoneNumbers)];
+                console.log(`${uniqueNumbers.length} unique phone numbers`);
+
+                if (uniqueNumbers.length > 0) {
+                    const response = await getAllContacts(uniqueNumbers);
+                    if (response?.status) {
+                        setContacts(response?.users || []);
+                        console.log(`Set ${response?.users?.length || 0} registered contacts`);
+                    } else {
+                        console.log('No registered users found');
+                        setContacts([]);
+                    }
+                } else {
+                    Alert.alert('No phone numbers found in your contacts.');
+                    setContacts([]);
+                }
+            } else {
+                Alert.alert('No contacts found on this device.');
+                setContacts([]);
+            }
+        } catch (error) {
+            console.error('Error loading contacts:', error);
+            Alert.alert('Error', 'Failed to load contacts. Please try again.');
+            setContacts([]);
+        }
+    };
 
     const validationSchema = Yup.object().shape({
         title: Yup.string().required('Title is required'),
@@ -93,14 +322,62 @@ function CreateEvent() {
         attendees: Yup.array().of(Yup.string().email('Invalid email')),
     })
 
+    // event Id from query
+    const { eventId }: { eventId: string | undefined | any } = useLocalSearchParams();
+
+    const fetchEvent = async () => {
+        if (eventId) {
+            const eventData = await getEventById(eventId);
+            if (eventData) {
+                setFormValues({
+                    ...eventData,
+                    startTime: new Date(eventData.startTime),
+                    endTime: new Date(eventData.endTime),
+                });
+            }
+        }
+    }
+
+    useFocusEffect(useCallback(() => {
+        fetchEvent();
+        return () => { };
+    }, [eventId]));
+
     const handleSubmit = async (values: CreateEventProps, { resetForm, setSubmitting }) => {
         try {
-            console.log(values, 'values');
-            // Example: await api.createEvent(values);
-            alert('Event created!');
-            resetForm();
-        } catch (e) {
-            alert('Failed to create event');
+            if (eventId) {
+                const response = await updateEvent(eventId, {
+                    ...values,
+                    startTime: values.startTime.toISOString(),
+                    endTime: values.endTime.toISOString(),
+                });
+                if (response.status) {
+                    Toast.show({
+                        type: 'success',
+                        text1: 'Event updated successfully',
+                        autoHide: true,
+                    });
+                    router.replace('/(app)/(tabs)/events');
+                }
+            } else {
+                const response = await createEvent(values);
+                if (response.status) {
+                    Toast.show({
+                        type: 'success',
+                        text1: 'Event created successfully',
+                        autoHide: true,
+                    });
+                    router.replace('/(app)/(tabs)/events');
+                } else {
+                    Toast.show({
+                        type: 'error',
+                        text1: 'Failed to create event. Please try again.',
+                        autoHide: true,
+                    });
+                }
+            }
+        } catch (e: any) {
+            alert(e.response.data.message);
         } finally {
             setSubmitting(false);
         }
@@ -108,18 +385,18 @@ function CreateEvent() {
 
     const searchLocation = async (query: string) => {
         if (!query.trim()) return;
-        
+
         try {
             const response = await fetch(
-                `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(query)}.json?access_token=${process.env.EXPO_PUBLIC_MAPBOX_ACCESS_TOKEN}&limit=5`
+                `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(query)}.json?access_token=${process.env.EXPO_PUBLIC_MAP_API_KEY}&limit=5`
             );
             const data = await response.json();
-            
+
             if (data.features && data.features.length > 0) {
                 const feature = data.features[0];
                 const coordinates: [number, number] = feature.center;
                 const address = feature.place_name;
-                
+
                 setSelectedLocation({ coordinates, address });
             }
         } catch (error) {
@@ -130,14 +407,14 @@ function CreateEvent() {
 
     const handleMapPress = async (feature: any) => {
         const coordinates: [number, number] = feature.geometry.coordinates;
-        
+
         try {
             // Reverse geocoding to get address
             const response = await fetch(
-                `https://api.mapbox.com/geocoding/v5/mapbox.places/${coordinates[0]},${coordinates[1]}.json?access_token=${process.env.EXPO_PUBLIC_MAPBOX_ACCESS_TOKEN}`
+                `https://api.mapbox.com/geocoding/v5/mapbox.places/${coordinates[0]},${coordinates[1]}.json?access_token=${process.env.EXPO_PUBLIC_MAP_API_KEY}`
             );
             const data = await response.json();
-            
+
             const address = data.features?.[0]?.place_name || `${coordinates[1].toFixed(6)}, ${coordinates[0].toFixed(6)}`;
             setSelectedLocation({ coordinates, address });
         } catch (error) {
@@ -146,87 +423,6 @@ function CreateEvent() {
             setSelectedLocation({ coordinates, address });
         }
     };
-
-    const LocationModal = ({ isVisible, onClose, onConfirm, setFieldValue }: any) => (
-        <Modal
-            visible={isVisible}
-            animationType="slide"
-            presentationStyle="pageSheet"
-        >
-            <View style={styles.modalContainer}>
-                <View style={styles.modalHeader}>
-                    <TouchableOpacity onPress={onClose}>
-                        <Text style={styles.modalCancelText}>Cancel</Text>
-                    </TouchableOpacity>
-                    <Text style={styles.modalTitle}>Select Location</Text>
-                    <TouchableOpacity 
-                        onPress={() => {
-                            if (selectedLocation) {
-                                setFieldValue('location', {
-                                    address: selectedLocation.address,
-                                    latitude: selectedLocation.coordinates[1],
-                                    longitude: selectedLocation.coordinates[0],
-                                });
-                                onConfirm();
-                            }
-                            onClose();
-                        }}
-                    >
-                        <Text style={styles.modalConfirmText}>Done</Text>
-                    </TouchableOpacity>
-                </View>
-
-                <View style={styles.searchContainer}>
-                    <TextInput
-                        style={styles.searchInput}
-                        placeholder="Search for a location..."
-                        placeholderTextColor="#9ca3af"
-                        value={searchQuery}
-                        onChangeText={setSearchQuery}
-                        onSubmitEditing={() => searchLocation(searchQuery)}
-                        returnKeyType="search"
-                    />
-                    <TouchableOpacity 
-                        style={styles.searchButton}
-                        onPress={() => searchLocation(searchQuery)}
-                    >
-                        <Text style={styles.searchButtonText}>🔍</Text>
-                    </TouchableOpacity>
-                </View>
-
-                <View style={styles.mapContainer}>
-                    <MapboxGL.MapView
-                        style={styles.map}
-                        onPress={handleMapPress}
-                    >
-                        <MapboxGL.Camera
-                            zoomLevel={10}
-                            centerCoordinate={selectedLocation?.coordinates || [-0.1276, 51.5074]} // Default to London
-                        />
-                        
-                        {selectedLocation && (
-                            <MapboxGL.PointAnnotation
-                                id="selected-location"
-                                coordinate={selectedLocation.coordinates}
-                            >
-                                <View style={styles.marker}>
-                                    <Text style={styles.markerText}>📍</Text>
-                                </View>
-                            </MapboxGL.PointAnnotation>
-                        )}
-                    </MapboxGL.MapView>
-                </View>
-
-                {selectedLocation && (
-                    <View style={styles.selectedLocationInfo}>
-                        <Text style={styles.selectedLocationText}>
-                            📍 {selectedLocation.address}
-                        </Text>
-                    </View>
-                )}
-            </View>
-        </Modal>
-    );
 
     return (
         <KeyboardAvoidingView
@@ -244,6 +440,7 @@ function CreateEvent() {
                     initialValues={formValues}
                     validationSchema={validationSchema}
                     onSubmit={handleSubmit}
+                    enableReinitialize={true}
                 >
                     {({
                         handleChange,
@@ -309,7 +506,8 @@ function CreateEvent() {
                                             month: '2-digit',
                                             year: 'numeric',
                                             hour: '2-digit',
-                                            minute: '2-digit'
+                                            minute: '2-digit',
+                                            hour12: true
                                         }) : 'Select start time'}
                                     </Text>
                                     <Text style={{ color: '#9ca3af', fontSize: 16 }}>📅</Text>
@@ -346,7 +544,8 @@ function CreateEvent() {
                                             month: '2-digit',
                                             year: 'numeric',
                                             hour: '2-digit',
-                                            minute: '2-digit'
+                                            minute: '2-digit',
+                                            hour12: true
                                         }) : 'Select end time'}
                                     </Text>
                                     <Text style={{ color: '#9ca3af', fontSize: 16 }}>📅</Text>
@@ -371,50 +570,66 @@ function CreateEvent() {
 
                             <View style={styles.card}>
                                 <Text style={styles.label}>Attendees</Text>
-                                <ScrollView style={styles.attendeesContainer} nestedScrollEnabled>
-                                    {contacts.length === 0 ? (
-                                        <Text style={styles.emptyText}>No contacts available</Text>
-                                    ) : (
-                                        contacts.map((email: string) => {
-                                            const isSelected = values.attendees.includes(email);
-                                            return (
-                                                <TouchableOpacity
-                                                    key={email}
-                                                    style={[
-                                                        styles.attendeeItem,
-                                                        isSelected && styles.attendeeSelected
-                                                    ]}
-                                                    onPress={() => {
-                                                        if (isSelected) {
-                                                            setFieldValue(
-                                                                'attendees',
-                                                                values.attendees.filter((a: string) => a !== email)
-                                                            );
-                                                        } else {
-                                                            setFieldValue(
-                                                                'attendees',
-                                                                [...values.attendees, email]
-                                                            );
-                                                        }
-                                                    }}
-                                                >
-                                                    <Text style={[
-                                                        styles.attendeeText,
-                                                        isSelected && styles.attendeeSelectedText
-                                                    ]}>
-                                                        {email}
-                                                    </Text>
-                                                    <View style={[
-                                                        styles.checkbox,
-                                                        isSelected && styles.checkboxSelected
-                                                    ]}>
-                                                        {isSelected && <Text style={styles.checkmark}>✓</Text>}
-                                                    </View>
-                                                </TouchableOpacity>
-                                            );
-                                        })
-                                    )}
-                                </ScrollView>
+                                {!contactPermissionGranted ? (
+                                    <View style={styles.permissionPrompt}>
+                                        <Text style={styles.permissionText}>
+                                            Grant contacts permission to invite people
+                                        </Text>
+                                        <TouchableOpacity
+                                            style={styles.permissionButton}
+                                            onPress={requestContactPermissions}
+                                        >
+                                            <Text style={styles.permissionButtonText}>
+                                                Allow Contacts
+                                            </Text>
+                                        </TouchableOpacity>
+                                    </View>
+                                ) : (
+                                    <ScrollView style={styles.attendeesContainer} nestedScrollEnabled>
+                                        {contacts.length === 0 ? (
+                                            <Text style={styles.emptyText}>No registered contacts found</Text>
+                                        ) : (
+                                            contacts.map((email: string) => {
+                                                const isSelected = values.attendees.includes(email);
+                                                return (
+                                                    <TouchableOpacity
+                                                        key={email}
+                                                        style={[
+                                                            styles.attendeeItem,
+                                                            isSelected && styles.attendeeSelected
+                                                        ]}
+                                                        onPress={() => {
+                                                            if (isSelected) {
+                                                                setFieldValue(
+                                                                    'attendees',
+                                                                    values.attendees.filter((a: string) => a !== email)
+                                                                );
+                                                            } else {
+                                                                setFieldValue(
+                                                                    'attendees',
+                                                                    [...values.attendees, email]
+                                                                );
+                                                            }
+                                                        }}
+                                                    >
+                                                        <Text style={[
+                                                            styles.attendeeText,
+                                                            isSelected && styles.attendeeSelectedText
+                                                        ]}>
+                                                            {email}
+                                                        </Text>
+                                                        <View style={[
+                                                            styles.checkbox,
+                                                            isSelected && styles.checkboxSelected
+                                                        ]}>
+                                                            {isSelected && <Text style={styles.checkmark}>✓</Text>}
+                                                        </View>
+                                                    </TouchableOpacity>
+                                                );
+                                            })
+                                        )}
+                                    </ScrollView>
+                                )}
                                 {touched.attendees && errors.attendees && typeof errors.attendees === 'string' && (
                                     <Text style={styles.errorText}>{errors.attendees}</Text>
                                 )}
@@ -433,7 +648,7 @@ function CreateEvent() {
                                         <Text style={{ color: '#9ca3af', fontSize: 16 }}>📍</Text>
                                     </View>
                                 </TouchableOpacity>
-                                
+
                                 {values.location.address && (
                                     <View style={styles.locationPreview}>
                                         <Text style={styles.locationPreviewText}>
@@ -447,7 +662,7 @@ function CreateEvent() {
                                         </TouchableOpacity>
                                     </View>
                                 )}
-                                
+
                                 {touched.location?.address && errors.location?.address && (
                                     <Text style={styles.errorText}>{errors.location.address}</Text>
                                 )}
@@ -462,7 +677,13 @@ function CreateEvent() {
                                 disabled={isSubmitting}
                             >
                                 <Text style={styles.submitButtonText}>
-                                    {isSubmitting ? 'Creating...' : 'Create Event'}
+                                    {
+                                        eventId ? (
+                                            isSubmitting ? 'Updating...' : 'Update Event'
+                                        ) : (
+                                            isSubmitting ? 'Creating...' : 'Create Event'
+                                        )
+                                    }
                                 </Text>
                             </TouchableOpacity>
 
@@ -471,6 +692,14 @@ function CreateEvent() {
                                 onClose={() => setShowLocationModal(false)}
                                 onConfirm={() => setShowLocationModal(false)}
                                 setFieldValue={setFieldValue}
+                                searchQuery={searchQuery}
+                                setSearchQuery={setSearchQuery}
+                                locationPermissionGranted={locationPermissionGranted}
+                                userLocation={userLocation}
+                                selectedLocation={selectedLocation}
+                                setSelectedLocation={setSelectedLocation}
+                                handleMapPress={handleMapPress}
+                                searchLocation={searchLocation}
                             />
                         </View>
                     )}
@@ -751,6 +980,63 @@ const styles = {
     selectedLocationText: {
         fontSize: 14,
         color: '#0369a1',
+    },
+    myLocationButton: {
+        backgroundColor: '#10b981',
+        borderRadius: 12,
+        padding: 12,
+        justifyContent: 'center' as const,
+        alignItems: 'center' as const,
+        minWidth: 48,
+    },
+    myLocationButtonText: {
+        fontSize: 16,
+    },
+    userLocationMarker: {
+        width: 20,
+        height: 20,
+        borderRadius: 10,
+        backgroundColor: '#ffffff',
+        borderWidth: 3,
+        borderColor: '#3b82f6',
+        alignItems: 'center' as const,
+        justifyContent: 'center' as const,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.3,
+        shadowRadius: 4,
+        elevation: 5,
+    },
+    userLocationDot: {
+        width: 8,
+        height: 8,
+        borderRadius: 4,
+        backgroundColor: '#3b82f6',
+    },
+    permissionPrompt: {
+        padding: 20,
+        alignItems: 'center' as const,
+        backgroundColor: '#f8fafc',
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: '#e2e8f0',
+    },
+    permissionText: {
+        fontSize: 14,
+        color: '#64748b',
+        textAlign: 'center' as const,
+        marginBottom: 12,
+    },
+    permissionButton: {
+        backgroundColor: '#3b82f6',
+        paddingHorizontal: 16,
+        paddingVertical: 8,
+        borderRadius: 8,
+    },
+    permissionButtonText: {
+        color: '#ffffff',
+        fontSize: 14,
+        fontWeight: '600' as const,
     },
 };
 
