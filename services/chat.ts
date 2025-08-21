@@ -1,9 +1,9 @@
 import Toast from 'react-native-toast-message';
 import axiosConnection from '../utils/axiosConnection'
 
-export const chatService = async (input: string) => {
+export const chatService = async (input: string, mode: string) => {
     try {
-        const response = await axiosConnection.post('/chat', { message: input });
+        const response = await axiosConnection.post('/chat', { message: input, mode });
         return response.data;
     } catch (error) {
         console.error("Error initializing chat service:", error);

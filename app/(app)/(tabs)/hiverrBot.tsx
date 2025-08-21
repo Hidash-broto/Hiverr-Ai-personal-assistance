@@ -1,3 +1,4 @@
+import { chatService, firstMessage } from '@/services/chat';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -6,6 +7,7 @@ import {
   Easing,
   FlatList,
   KeyboardAvoidingView,
+  Modal,
   Platform,
   Pressable,
   StatusBar,
@@ -14,6 +16,8 @@ import {
   TextInput,
   View
 } from 'react-native';
+import Markdown from 'react-native-markdown-display';
+import Voice from '@react-native-voice/voice';
 
 type Message = {
   id: string;
@@ -81,19 +85,104 @@ function TypingDots() {
   );
 }
 
+const markdownStyles = StyleSheet.create({
+  body: { color: '#0f172a', fontSize: 14, lineHeight: 20 },
+  paragraph: { marginTop: 0, marginBottom: 4 },
+  bullet_list: { marginVertical: 4, paddingLeft: 6 },
+  ordered_list: { marginVertical: 4, paddingLeft: 6 },
+  list_item: { flexDirection: 'row', marginBottom: 2 },
+  list_item_content: { flex: 1 },
+  strong: { fontWeight: '700' },
+  code_inline: {
+    backgroundColor: '#f1f5f9',
+    color: '#0f172a',
+    borderRadius: 4,
+    paddingHorizontal: 4,
+    paddingVertical: 1,
+  },
+  link: { color: '#2563eb' },
+});
+
+function VoiceWaveAnimation() {
+  // Create multiple animated values for different bars using useMemo
+  const bars = useMemo(() => 
+    Array.from({ length: 7 }).map(() => new Animated.Value(0.1)),
+    []
+  );
+
+  // Create the value for translateY multiplication once
+  const translateYMultiplier = useMemo(() => new Animated.Value(-20), []);
+  
+  useEffect(() => {
+    // Animation function for a single bar
+    const animateBar = (bar: Animated.Value) => {
+      // Random height between 0.3 and 1
+      const toValue = 0.3 + Math.random() * 0.7;
+      // Random duration between 300ms and 700ms
+      const duration = 300 + Math.random() * 400;
+      
+      Animated.sequence([
+        Animated.timing(bar, {
+          toValue,
+          duration,
+          useNativeDriver: true,
+          easing: Easing.inOut(Easing.ease),
+        }),
+        Animated.timing(bar, {
+          toValue: 0.2 + Math.random() * 0.3,
+          duration: duration * 0.7,
+          useNativeDriver: true,
+          easing: Easing.inOut(Easing.ease),
+        })
+      ]).start(() => {
+        // Continue the animation
+        animateBar(bar);
+      });
+    };
+
+    // Start animation for all bars
+    const animations = bars.map(bar => {
+      animateBar(bar);
+      return bar;
+    });
+
+    return () => {
+      // Proper cleanup
+      animations.forEach(anim => anim.stopAnimation());
+    };
+  }, [bars]); // Add bars as dependency
+
+  return (
+    <View style={styles.waveContainer}>
+      {bars.map((bar, index) => (
+        <Animated.View
+          key={index}
+          style={[
+            styles.bar,
+            {
+              height: 80,
+              transform: [
+                { scaleY: bar },
+                { translateY: Animated.multiply(bar, translateYMultiplier) }
+              ],
+              backgroundColor: index % 2 === 0 ? '#60a5fa' : '#3b82f6',
+              marginHorizontal: 3,
+            },
+          ]}
+        />
+      ))}
+    </View>
+  );
+}
+
 export default function HiverrBot() {
-  const [messages, setMessages] = useState<Message[]>([
-    {
-      id: 'm-0',
-      role: 'bot',
-      text: 'Hey there! I’m Hiverr Bot. How can I help you today?',
-      timestamp: Date.now(),
-    },
-  ]);
+  const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [typing, setTyping] = useState(false);
-  const [mode, setMode] = useState<'ask' | 'agentic'>('ask'); // new: chat mode state
+  const [mode, setMode] = useState<'ask' | 'agent' | 'llm'>('ask'); // new: chat mode state
   const [modeMenuVisible, setModeMenuVisible] = useState(false);
+  const [isListening, setIsListening] = useState(false);
+
   const listRef = useRef<FlatList<Message>>(null);
 
   const canSend = useMemo(() => input.trim().length > 0 && !typing, [input, typing]);
@@ -112,19 +201,24 @@ export default function HiverrBot() {
     setInput('');
     setMessages(prev => [userMsg, ...prev]);
 
-    // Simulate bot typing/response (behavior could vary by mode)
+    // Simulate bot typing/response (UI-only, no API)
     setTyping(true);
+    const response = await chatService(text, mode)
+    if (!response.replay) {
+      setTyping(false);
+      console.error('Unexpected response format:', response);
+      return;
+    }
+    const botMsg: Message = {
+      id: `b-${Date.now()}`,
+      role: 'bot',
+      text: response.replay,
+      timestamp: Date.now(),
+    };
     setTimeout(() => {
-      const botText = generateBotReply(text, mode);
-      const botMsg: Message = {
-        id: `b-${Date.now()}`,
-        role: 'bot',
-        text: botText,
-        timestamp: Date.now(),
-      };
       setMessages(prev => [botMsg, ...prev]);
       setTyping(false);
-    }, 900);
+    }, 500)
   };
 
   // New: clear all chats with confirmation
@@ -157,15 +251,97 @@ export default function HiverrBot() {
       <View style={[styles.row, isUser ? styles.rowRight : styles.rowLeft]}>
         {!isUser && <View style={styles.avatar}><Text style={styles.avatarEmoji}>🧸</Text></View>}
         <View style={[styles.bubble, isUser ? styles.userBubble : styles.botBubble]}>
-          <Text style={[styles.bubbleText, isUser ? styles.userText : styles.botText]}>
-            {item.text}
-          </Text>
+          {isUser ? (
+            <Text style={[styles.bubbleText, styles.userText]}>{item.text}</Text>
+          ) : (
+            <Markdown style={markdownStyles}>{item.text || ''}</Markdown>
+          )}
           <Text style={styles.timeText}>{formatTime(item.timestamp)}</Text>
         </View>
         {isUser && <View style={styles.spacer} />}
       </View>
     );
   };
+
+  useEffect(() => {
+    const fetchData = async () => {
+      const response = await firstMessage();
+      console.log(response, '<initialMessages>');
+      setMessages([{
+        id: `m-${Date.now()}`,
+        role: 'bot',
+        text: response?.message,
+        timestamp: Date.now(),
+      }]);
+    };
+
+    fetchData();
+  }, []);
+
+  useEffect(() => {
+    // Only add mode change message if there are existing messages
+    if (messages.length > 0) {
+      const modeName = mode === 'ask' ? 'Ask' : mode === 'llm' ? 'LLM' : 'Agentic';
+      setMessages([{
+        id: `mode-change-${Date.now()}`,
+        role: 'bot',
+        text: `Mode changed to ${modeName}. I'll respond using ${modeName} capabilities.`,
+        timestamp: Date.now(),
+      }]);
+    }
+  }, [mode]);
+
+  // useEffect(() => {
+  //   Voice.onSpeechResults = (event) => {
+  //     setInput(event?.value[0]); // best transcription
+  //   };
+
+  //   return () => {
+  //     Voice.destroy().then(Voice.removeAllListeners);
+  //   };
+  // }, [])
+
+  const voiceOnClick = async () => {
+    try {
+      setIsListening(true);
+      await Voice.start('en-US');
+    } catch (error) {
+      console.error('Error starting Voice:', error);
+      setIsListening(false);
+    }
+  }
+
+  const stopListening = async () => {
+    try {
+      await Voice.stop();
+      setIsListening(false);
+    } catch (error) {
+      console.error('Error stopping Voice:', error);
+    }
+  }
+
+  // Add voice recognition event handlers
+  useEffect(() => {
+    Voice.onSpeechResults = (event) => {
+      if (event.value && event.value[0]) {
+        setInput(event.value[0]); // Use the best result
+        stopListening(); // Stop listening after getting results
+      }
+    };
+
+    Voice.onSpeechError = (error) => {
+      console.error('Speech recognition error', error);
+      setIsListening(false);
+    };
+
+    Voice.onSpeechEnd = () => {
+      setIsListening(false);
+    };
+
+    return () => {
+      Voice.destroy().then(Voice.removeAllListeners);
+    };
+  }, []);
 
   return (
     <KeyboardAvoidingView
@@ -189,7 +365,7 @@ export default function HiverrBot() {
           accessibilityLabel="Select chat mode"
         >
           <MaterialIcons name="swap-vert" size={20} color="#0f172a" />
-          <Text style={styles.modeLabel}>{mode === 'ask' ? 'Ask' : 'Agentic'}</Text>
+          <Text style={styles.modeLabel}>{mode === 'ask' ? 'Ask' : mode === 'llm' ? 'LLM' : 'Agentic'}</Text>
         </Pressable>
 
         {/* Clear chats button */}
@@ -211,11 +387,18 @@ export default function HiverrBot() {
               {mode === 'ask' && <MaterialIcons name="check" size={18} color="#3b82f6" />}
             </Pressable>
             <Pressable
-              style={[styles.modeItem, mode === 'agentic' && styles.modeItemSelected]}
-              onPress={() => { setMode('agentic'); setModeMenuVisible(false); }}
+              style={[styles.modeItem, mode === 'agent' && styles.modeItemSelected]}
+              onPress={() => { setMode('agent'); setModeMenuVisible(false); }}
             >
-              <Text style={[styles.modeItemText, mode === 'agentic' && styles.modeItemTextSelected]}>Agentic mode</Text>
-              {mode === 'agentic' && <MaterialIcons name="check" size={18} color="#3b82f6" />}
+              <Text style={[styles.modeItemText, mode === 'agent' && styles.modeItemTextSelected]}>Agent mode</Text>
+              {mode === 'agent' && <MaterialIcons name="check" size={18} color="#3b82f6" />}
+            </Pressable>
+            <Pressable
+              style={[styles.modeItem, mode === 'llm' && styles.modeItemSelected]}
+              onPress={() => { setMode('llm'); setModeMenuVisible(false); }}
+            >
+              <Text style={[styles.modeItemText, mode === 'llm' && styles.modeItemTextSelected]}>LLM mode</Text>
+              {mode === 'llm' && <MaterialIcons name="check" size={18} color="#3b82f6" />}
             </Pressable>
           </View>
         </View>
@@ -253,6 +436,17 @@ export default function HiverrBot() {
           maxLength={1000}
         />
         <Pressable
+          onPress={voiceOnClick}
+          disabled={input.length ? true : false}
+          style={({ pressed }) => [
+            { height: 44, width: 44, borderRadius: 22, backgroundColor: '#3b82f6', alignItems: 'center', justifyContent: 'center' },
+            { opacity: pressed ? 0.8 : 1 }
+          ]}
+          accessibilityLabel='Voice mode'
+        >
+          <MaterialIcons name='voice-chat' size={20} color='#ffffff' />
+        </Pressable>
+        <Pressable
           onPress={sendMessage}
           disabled={!canSend}
           style={({ pressed }) => [
@@ -264,27 +458,31 @@ export default function HiverrBot() {
           <MaterialIcons name="send" size={20} color="#ffffff" />
         </Pressable>
       </View>
+
+      {/* Voice listening modal */}
+      <Modal
+        visible={isListening}
+        transparent
+        animationType="fade"
+        onRequestClose={stopListening}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.voiceModal}>
+            <Text style={styles.voiceTitle}>Listening...</Text>
+            <VoiceWaveAnimation />
+            <Text style={styles.voiceSubtitle}>Say something</Text>
+            <Pressable
+              style={styles.stopButton}
+              onPress={stopListening}
+            >
+              <MaterialIcons name="stop" size={24} color="#fff" />
+              <Text style={styles.stopButtonText}>Stop</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
     </KeyboardAvoidingView>
   );
-}
-
-// Bot reply generator respects mode
-function generateBotReply(userText: string, mode: 'ask' | 'agentic') {
-  const t = userText.toLowerCase();
-  if (mode === 'agentic') {
-    // agentic: more proactive / guided answer
-    if (t.includes('event')) return 'I can create an event for you. Tell me the title and time and I will set it up.';
-    if (t.includes('task')) return 'I can manage tasks for you — create, update, and assign. Want to start?';
-  } else {
-    // ask mode: short responses and clarifying
-    if (t.includes('event')) return 'Would you like help creating an event?';
-    if (t.includes('task')) return 'Do you want to create or view tasks?';
-  }
-  if (t.includes('hello') || t.includes('hi')) return 'Hello! How can I help you today?';
-  if (t.includes('help')) return 'Sure—tell me what you need help with and I’ll guide you.';
-  return mode === 'agentic'
-    ? 'Got it — I can take care of that for you. Tell me more.'
-    : 'Got it! I’m here if you want to ask anything else.';
 }
 
 function formatTime(ts: number) {
@@ -358,4 +556,60 @@ const styles = StyleSheet.create({
   inputBar: { flexDirection: 'row', alignItems: 'flex-end', gap: 8, paddingHorizontal: 12, paddingVertical: 10, borderTopWidth: 1, borderTopColor: '#e2e8f0', backgroundColor: '#f8fafc' },
   input: { flex: 1, minHeight: 44, maxHeight: 120, paddingHorizontal: 12, paddingVertical: 10, backgroundColor: '#ffffff', borderRadius: 14, borderWidth: 1, borderColor: '#e2e8f0', color: '#0f172a', fontSize: 14 },
   sendBtn: { height: 44, width: 44, borderRadius: 22, backgroundColor: '#3b82f6', alignItems: 'center', justifyContent: 'center' },
+
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  voiceModal: {
+    backgroundColor: '#fff',
+    width: '80%',
+    maxWidth: 300,
+    borderRadius: 16,
+    paddingVertical: 24,
+    paddingHorizontal: 16,
+    alignItems: 'center',
+    elevation: 5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+  },
+  voiceTitle: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: '#0f172a',
+    marginBottom: 20,
+  },
+  voiceSubtitle: {
+    fontSize: 14,
+    color: '#64748b',
+    marginTop: 16,
+    marginBottom: 20,
+  },
+  waveContainer: {
+    flexDirection: 'row',
+    height: 80,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  bar: {
+    width: 6,
+    borderRadius: 3,
+  },
+  stopButton: {
+    backgroundColor: '#ef4444',
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    borderRadius: 20,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  stopButtonText: {
+    color: '#fff',
+    fontWeight: '600',
+    marginLeft: 8,
+  },
 });
