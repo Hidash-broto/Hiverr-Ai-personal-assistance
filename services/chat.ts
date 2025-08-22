@@ -28,3 +28,21 @@ export const firstMessage = async () => {
         })
     }
 }
+
+export const voiceToText = async (formData: FormData) => {
+    try {
+        const response = await axiosConnection.post('/chat/voice-to-text', formData, {
+            headers: {
+                'Content-Type': 'multipart/form-data'
+            }
+        });
+        return response.data
+    } catch (error) {
+        console.error("Error converting voice to text:", error);
+        Toast.show({
+            text1: 'Chat Service Error',
+            text2: error.response.data.message || 'Failed to convert voice to text.',
+            type: 'error'
+        })
+    }
+}

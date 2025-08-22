@@ -1,4 +1,4 @@
-import { chatService, firstMessage } from '@/services/chat';
+import { chatService, firstMessage, voiceToText } from '@/services/chat';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -14,10 +14,20 @@ import {
   StyleSheet,
   Text,
   TextInput,
-  View
+  View,
+  PermissionsAndroid,
+  Button
 } from 'react-native';
 import Markdown from 'react-native-markdown-display';
+import {
+  useAudioRecorder,
+  AudioModule,
+  RecordingPresets,
+  setAudioModeAsync,
+  useAudioRecorderState,
+} from 'expo-audio';
 import Voice from '@react-native-voice/voice';
+
 
 type Message = {
   id: string;
@@ -105,14 +115,14 @@ const markdownStyles = StyleSheet.create({
 
 function VoiceWaveAnimation() {
   // Create multiple animated values for different bars using useMemo
-  const bars = useMemo(() => 
+  const bars = useMemo(() =>
     Array.from({ length: 7 }).map(() => new Animated.Value(0.1)),
     []
   );
 
   // Create the value for translateY multiplication once
   const translateYMultiplier = useMemo(() => new Animated.Value(-20), []);
-  
+
   useEffect(() => {
     // Animation function for a single bar
     const animateBar = (bar: Animated.Value) => {
@@ -120,7 +130,7 @@ function VoiceWaveAnimation() {
       const toValue = 0.3 + Math.random() * 0.7;
       // Random duration between 300ms and 700ms
       const duration = 300 + Math.random() * 400;
-      
+
       Animated.sequence([
         Animated.timing(bar, {
           toValue,
@@ -182,6 +192,10 @@ export default function HiverrBot() {
   const [mode, setMode] = useState<'ask' | 'agent' | 'llm'>('ask'); // new: chat mode state
   const [modeMenuVisible, setModeMenuVisible] = useState(false);
   const [isListening, setIsListening] = useState(false);
+  const [voice, setVoice] = useState<string | null>(null);
+
+  const audioRecorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
+  const recorderState = useAudioRecorderState(audioRecorder);
 
   const listRef = useRef<FlatList<Message>>(null);
 
@@ -266,20 +280,20 @@ export default function HiverrBot() {
   useEffect(() => {
     const fetchData = async () => {
       const response = await firstMessage();
-      console.log(response, '<initialMessages>');
-      setMessages([{
-        id: `m-${Date.now()}`,
-        role: 'bot',
-        text: response?.message,
-        timestamp: Date.now(),
-      }]);
+      if (response) {
+        setMessages([{
+          id: `m-${Date.now()}`,
+          role: 'bot',
+          text: response?.message,
+          timestamp: Date.now(),
+        }]);
+      }
     };
 
     fetchData();
   }, []);
 
   useEffect(() => {
-    // Only add mode change message if there are existing messages
     if (messages.length > 0) {
       const modeName = mode === 'ask' ? 'Ask' : mode === 'llm' ? 'LLM' : 'Agentic';
       setMessages([{
@@ -291,16 +305,6 @@ export default function HiverrBot() {
     }
   }, [mode]);
 
-  // useEffect(() => {
-  //   Voice.onSpeechResults = (event) => {
-  //     setInput(event?.value[0]); // best transcription
-  //   };
-
-  //   return () => {
-  //     Voice.destroy().then(Voice.removeAllListeners);
-  //   };
-  // }, [])
-
   const voiceOnClick = async () => {
     try {
       setIsListening(true);
@@ -311,8 +315,82 @@ export default function HiverrBot() {
     }
   }
 
+ useEffect(() => {
+    const onSpeechStartHandler = (e: any) => {
+      console.log("onSpeechStart: ", e);
+      setIsListening(true);
+    };
+
+    const onSpeechRecognizedHandler = (e: SpeechRecognizedEvent) => {
+      console.log("onSpeechRecognized: ", e);
+      setRecognized("√");
+    };
+
+    const onSpeechEndHandler = (e: any) => {
+      console.log("onSpeechEnd: ", e);
+      setEnd("√");
+      setStarted(false);
+      onSpeechEnd(results);
+    };
+
+    const onSpeechErrorHandler = (e: SpeechErrorEvent) => {
+      console.log("onSpeechError: ", e);
+      setError(JSON.stringify(e.error));
+    };
+
+    const onSpeechResultsHandler = (e: SpeechResultsEvent) => {
+      console.log("onSpeechResults: ", e);
+      setResults(e.value!);
+    };
+
+    const onSpeechPartialResultsHandler = (e: SpeechResultsEvent) => {
+      console.log("onSpeechPartialResults: ", e);
+      setPartialResults(e.value!);
+    };
+
+    const onSpeechVolumeChangedHandler = (e: any) => {
+      console.log("onSpeechVolumeChanged: ", e);
+      setPitch(e.value);
+    };
+
+    // Set up Voice event listeners
+    Voice.onSpeechStart = onSpeechStartHandler;
+    Voice.onSpeechRecognized = onSpeechRecognizedHandler;
+    Voice.onSpeechEnd = onSpeechEndHandler;
+    Voice.onSpeechError = onSpeechErrorHandler;
+    Voice.onSpeechResults = onSpeechResultsHandler;
+    Voice.onSpeechPartialResults = onSpeechPartialResultsHandler;
+    Voice.onSpeechVolumeChanged = onSpeechVolumeChangedHandler;
+
+    // Cleanup function (equivalent to componentWillUnmount)
+    return () => {
+      Voice.destroy().then(Voice.removeAllListeners);
+    };
+  }, [onSpeechEnd, results]);
+
+  // const voiceOnClick = async () => {
+  //   try {
+  //     setIsListening(true);
+  //     await audioRecorder.prepareToRecordAsync({
+  //       android: {
+  //         extension: '.mp3',
+  //         outputFormat: AudioModule.RECORDING_OPTION_ANDROID_OUTPUT_FORMAT_MPEG_4,
+  //         audioEncoder: AudioModule.RECORDING_OPTION_ANDROID_AUDIO_ENCODER_AAC,
+  //         sampleRate: 44100,
+  //         numberOfChannels: 2,
+  //         bitRate: 128000,
+  //       }
+  //     });
+  //     audioRecorder.record();
+  //   } catch (error) {
+  //     console.error('Error starting Voice:', error);
+  //     setIsListening(false);
+  //   }
+  // }
+
   const stopListening = async () => {
     try {
+      if (!isListening) return;
       await Voice.stop();
       setIsListening(false);
     } catch (error) {
@@ -320,27 +398,70 @@ export default function HiverrBot() {
     }
   }
 
-  // Add voice recognition event handlers
+  // const stopListening = async () => {
+  //   try {
+  //     if (!isListening) return;
+  //     const result = await audioRecorder.stop();
+  //     const uri = (result as any)?.url;
+  //     setVoice(uri);
+  //     setIsListening(false);
+  //   } catch (error) {
+  //     console.error('Error stopping Voice:', error);
+  //   }
+  // }
+
+  const sendingVoiceforTranscript = async () => {
+    if (!voice) return;
+    const formData = new FormData();
+    formData.append('audio', {
+      uri: voice,
+      type: 'audio/mp3',
+      name: 'voice.mp3',
+    } as any);
+    const response = await voiceToText(formData);
+    console.log(response, 'response')
+    if (response) {
+      setInput(response.text);
+    }
+  }
+
   useEffect(() => {
-    Voice.onSpeechResults = (event) => {
-      if (event.value && event.value[0]) {
-        setInput(event.value[0]); // Use the best result
-        stopListening(); // Stop listening after getting results
-      }
-    };
-
-    Voice.onSpeechError = (error) => {
-      console.error('Speech recognition error', error);
-      setIsListening(false);
-    };
-
-    Voice.onSpeechEnd = () => {
-      setIsListening(false);
-    };
-
+    console.log(voice, 'voice recorded');
+    // sendingVoiceforTranscript();
     return () => {
-      Voice.destroy().then(Voice.removeAllListeners);
+      Voice.destroy();
     };
+  }, [voice]);
+
+  // ask for microphone access
+  async function requestMicrophonePermission() {
+    try {
+      const granted = await PermissionsAndroid.request(
+        PermissionsAndroid.PERMISSIONS.RECORD_AUDIO,
+        {
+          title: 'Microphone Permission',
+          message: 'Your app needs access to your microphone for audio recording.',
+          buttonNeutral: 'Ask Me Later',
+          buttonNegative: 'Cancel',
+          buttonPositive: 'OK',
+        },
+      );
+      if (granted === PermissionsAndroid.RESULTS.GRANTED) {
+        console.log('You can use the microphone');
+        return true;
+      } else {
+        console.log('Microphone permission denied');
+        return false;
+      }
+    } catch (err) {
+      console.warn(err);
+      return false;
+    }
+  }
+
+  // request microphone permission on mount
+  useEffect(() => {
+    requestMicrophonePermission();
   }, []);
 
   return (
@@ -444,7 +565,7 @@ export default function HiverrBot() {
           ]}
           accessibilityLabel='Voice mode'
         >
-          <MaterialIcons name='voice-chat' size={20} color='#ffffff' />
+          <MaterialIcons name='record-voice-over' size={20} color='#ffffff' />
         </Pressable>
         <Pressable
           onPress={sendMessage}
@@ -458,6 +579,28 @@ export default function HiverrBot() {
           <MaterialIcons name="send" size={20} color="#ffffff" />
         </Pressable>
       </View>
+      {/* <View style={{
+        flex: 1,
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: '#04ff0028',
+      }}>
+
+        <Text style={{ color: 'white', fontWeight: 'bold' }}>Result: {voice}</Text>
+        <Button
+          title="Mic check"
+          color={'#ace10d'}
+          onPress={async () => {
+            try {
+              const audioText = await startSpeechToText();
+              console.log('audioText:', { audioText });
+              setVoice(audioText);
+            } catch (error) {
+              console.log({ error });
+            }
+          }}
+        />
+      </View> */}
 
       {/* Voice listening modal */}
       <Modal

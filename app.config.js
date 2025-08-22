@@ -24,6 +24,7 @@ export default {
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#ffffff",
       },
+      "permissions": ["android.permission.RECORD_AUDIO"],
       "package": "com.hidash.mobileclient"
     },
     "web": {
@@ -32,7 +33,18 @@ export default {
       "favicon": "./assets/images/favicon.png"
     },
     "plugins": [
-      "expo-router",
+      [
+        "expo-audio",
+        {
+          "microphonePermission": "Allow $(PRODUCT_NAME) to access your microphone."
+        }
+      ],
+      [
+        "@react-native-voice/voice"
+      ],
+      [
+        "expo-router",
+      ],
       [
         "expo-contacts",
         {
