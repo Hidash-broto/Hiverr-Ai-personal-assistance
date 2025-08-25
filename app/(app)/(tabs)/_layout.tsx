@@ -33,21 +33,20 @@ export default function TabLayout() {
         options={{
           title: 'Home',
           tabBarIcon: ({ color }) => <IconSymbol size={28} name="house.fill" color={color} />,
+          headerShown: false,
         }}
       />
       <Tabs.Screen
         name="tasks"
         options={{
           title: 'Tasks',
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="list.bullet" color={color} />,
+          tabBarIcon: ({ color }) => <MaterialIcons size={17} name="checklist-rtl" color={color} />,
           headerRight: () => (
             <Pressable style={{ marginRight: 15 }} onPress={() => redirect.push('/create-task')}>
               {({ pressed }) => (
-                <IconSymbol
-                  size={28}
-                  name="plus"
-                  color={pressed ? Colors[colorScheme ?? 'light'].tint : Colors[colorScheme ?? 'light'].text}
-                />
+              <View style={{ backgroundColor: 'black', width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center' }}>
+                <MaterialIcons size={17} name="add" color='white' />
+              </View>
               )}
             </Pressable>
           ),
@@ -71,7 +70,7 @@ export default function TabLayout() {
         name="events"
         options={{
           title: 'Events',
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="button.programmable.square" color={color} />,
+          tabBarIcon: ({ color }) => <MaterialIcons size={17} name="event" color={color} />,
           headerRight: () => (
             <Pressable style={{ marginRight: 15 }} onPress={() => redirect.push('/create-event')}>
               {({ pressed }) => (
@@ -87,14 +86,15 @@ export default function TabLayout() {
         name="calender"
         options={{
           title: 'Calender',
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="calendar" color={color} />,
+          tabBarIcon: ({ color }) => <MaterialIcons size={17} name="calendar-month" color={color} />,
+          headerShown: false,
         }}
       />
       <Tabs.Screen
         name="hiverrBot"
         options={{
           title: 'Hiverr Bot',
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="robotic.vacuum.fill" color={color} />,
+          tabBarIcon: ({ color }) => <MaterialIcons size={17} name="computer" color={color} />,
           headerShown: false,
         }}
       />

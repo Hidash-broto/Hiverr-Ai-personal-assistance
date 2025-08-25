@@ -1,6 +1,12 @@
 import { chatService, firstMessage, voiceToText } from '@/services/chat';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+// Add Voice import
+import Voice, {
+  SpeechRecognizedEvent,
+  SpeechResultsEvent,
+  SpeechErrorEvent,
+} from "@react-native-voice/voice";
 import {
   Alert,
   Animated,
@@ -16,17 +22,8 @@ import {
   TextInput,
   View,
   PermissionsAndroid,
-  Button
 } from 'react-native';
 import Markdown from 'react-native-markdown-display';
-import {
-  useAudioRecorder,
-  AudioModule,
-  RecordingPresets,
-  setAudioModeAsync,
-  useAudioRecorderState,
-} from 'expo-audio';
-import Voice from '@react-native-voice/voice';
 
 
 type Message = {
@@ -194,45 +191,46 @@ export default function HiverrBot() {
   const [isListening, setIsListening] = useState(false);
   const [voice, setVoice] = useState<string | null>(null);
 
-  const audioRecorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
-  const recorderState = useAudioRecorderState(audioRecorder);
-
   const listRef = useRef<FlatList<Message>>(null);
 
   const canSend = useMemo(() => input.trim().length > 0 && !typing, [input, typing]);
 
   const sendMessage = async () => {
-    const text = input.trim();
-    if (!text) return;
+    try {
+      const text = input.trim();
+      if (!text) return;
 
-    const userMsg: Message = {
-      id: `u-${Date.now()}`,
-      role: 'user',
-      text,
-      timestamp: Date.now(),
-    };
+      const userMsg: Message = {
+        id: `u-${Date.now()}`,
+        role: 'user',
+        text,
+        timestamp: Date.now(),
+      };
 
-    setInput('');
-    setMessages(prev => [userMsg, ...prev]);
+      setInput('');
+      setMessages(prev => [userMsg, ...prev]);
 
-    // Simulate bot typing/response (UI-only, no API)
-    setTyping(true);
-    const response = await chatService(text, mode)
-    if (!response.replay) {
+      // Simulate bot typing/response (UI-only, no API)
+      setTyping(true);
+      const response = await chatService(text, mode)
+      if (!response.replay) {
+        setTyping(false);
+        console.error('Unexpected response format:', response);
+        return;
+      }
+      const botMsg: Message = {
+        id: `b-${Date.now()}`,
+        role: 'bot',
+        text: response.replay,
+        timestamp: Date.now(),
+      };
+      setTimeout(() => {
+        setMessages(prev => [botMsg, ...prev]);
+        setTyping(false);
+      }, 500)
+    } finally {
       setTyping(false);
-      console.error('Unexpected response format:', response);
-      return;
     }
-    const botMsg: Message = {
-      id: `b-${Date.now()}`,
-      role: 'bot',
-      text: response.replay,
-      timestamp: Date.now(),
-    };
-    setTimeout(() => {
-      setMessages(prev => [botMsg, ...prev]);
-      setTyping(false);
-    }, 500)
   };
 
   // New: clear all chats with confirmation
@@ -305,110 +303,6 @@ export default function HiverrBot() {
     }
   }, [mode]);
 
-  const voiceOnClick = async () => {
-    try {
-      setIsListening(true);
-      await Voice.start('en-US');
-    } catch (error) {
-      console.error('Error starting Voice:', error);
-      setIsListening(false);
-    }
-  }
-
- useEffect(() => {
-    const onSpeechStartHandler = (e: any) => {
-      console.log("onSpeechStart: ", e);
-      setIsListening(true);
-    };
-
-    const onSpeechRecognizedHandler = (e: SpeechRecognizedEvent) => {
-      console.log("onSpeechRecognized: ", e);
-      setRecognized("√");
-    };
-
-    const onSpeechEndHandler = (e: any) => {
-      console.log("onSpeechEnd: ", e);
-      setEnd("√");
-      setStarted(false);
-      onSpeechEnd(results);
-    };
-
-    const onSpeechErrorHandler = (e: SpeechErrorEvent) => {
-      console.log("onSpeechError: ", e);
-      setError(JSON.stringify(e.error));
-    };
-
-    const onSpeechResultsHandler = (e: SpeechResultsEvent) => {
-      console.log("onSpeechResults: ", e);
-      setResults(e.value!);
-    };
-
-    const onSpeechPartialResultsHandler = (e: SpeechResultsEvent) => {
-      console.log("onSpeechPartialResults: ", e);
-      setPartialResults(e.value!);
-    };
-
-    const onSpeechVolumeChangedHandler = (e: any) => {
-      console.log("onSpeechVolumeChanged: ", e);
-      setPitch(e.value);
-    };
-
-    // Set up Voice event listeners
-    Voice.onSpeechStart = onSpeechStartHandler;
-    Voice.onSpeechRecognized = onSpeechRecognizedHandler;
-    Voice.onSpeechEnd = onSpeechEndHandler;
-    Voice.onSpeechError = onSpeechErrorHandler;
-    Voice.onSpeechResults = onSpeechResultsHandler;
-    Voice.onSpeechPartialResults = onSpeechPartialResultsHandler;
-    Voice.onSpeechVolumeChanged = onSpeechVolumeChangedHandler;
-
-    // Cleanup function (equivalent to componentWillUnmount)
-    return () => {
-      Voice.destroy().then(Voice.removeAllListeners);
-    };
-  }, [onSpeechEnd, results]);
-
-  // const voiceOnClick = async () => {
-  //   try {
-  //     setIsListening(true);
-  //     await audioRecorder.prepareToRecordAsync({
-  //       android: {
-  //         extension: '.mp3',
-  //         outputFormat: AudioModule.RECORDING_OPTION_ANDROID_OUTPUT_FORMAT_MPEG_4,
-  //         audioEncoder: AudioModule.RECORDING_OPTION_ANDROID_AUDIO_ENCODER_AAC,
-  //         sampleRate: 44100,
-  //         numberOfChannels: 2,
-  //         bitRate: 128000,
-  //       }
-  //     });
-  //     audioRecorder.record();
-  //   } catch (error) {
-  //     console.error('Error starting Voice:', error);
-  //     setIsListening(false);
-  //   }
-  // }
-
-  const stopListening = async () => {
-    try {
-      if (!isListening) return;
-      await Voice.stop();
-      setIsListening(false);
-    } catch (error) {
-      console.error('Error stopping Voice:', error);
-    }
-  }
-
-  // const stopListening = async () => {
-  //   try {
-  //     if (!isListening) return;
-  //     const result = await audioRecorder.stop();
-  //     const uri = (result as any)?.url;
-  //     setVoice(uri);
-  //     setIsListening(false);
-  //   } catch (error) {
-  //     console.error('Error stopping Voice:', error);
-  //   }
-  // }
 
   const sendingVoiceforTranscript = async () => {
     if (!voice) return;
@@ -424,14 +318,6 @@ export default function HiverrBot() {
       setInput(response.text);
     }
   }
-
-  useEffect(() => {
-    console.log(voice, 'voice recorded');
-    // sendingVoiceforTranscript();
-    return () => {
-      Voice.destroy();
-    };
-  }, [voice]);
 
   // ask for microphone access
   async function requestMicrophonePermission() {
@@ -463,6 +349,65 @@ export default function HiverrBot() {
   useEffect(() => {
     requestMicrophonePermission();
   }, []);
+
+  // Set up Voice event listeners
+  useEffect(() => {
+    const onSpeechStartHandler = () => {
+      console.log("Speech started");
+    };
+
+    const onSpeechEndHandler = () => {
+      console.log("Speech ended");
+      setIsListening(false);
+    };
+
+    const onSpeechResultsHandler = (e: SpeechResultsEvent) => {
+      console.log("Speech results:", e);
+      // Auto-update the input field with the speech result
+      if (e.value && e.value.length > 0) {
+        setInput(e.value[0]);
+      }
+    };
+
+    const onSpeechErrorHandler = (e: SpeechErrorEvent) => {
+      console.log("Speech error:", e);
+      setIsListening(false);
+    };
+
+    // Set up Voice event handlers
+    Voice.onSpeechStart = onSpeechStartHandler;
+    Voice.onSpeechEnd = onSpeechEndHandler;
+    Voice.onSpeechResults = onSpeechResultsHandler;
+    Voice.onSpeechError = onSpeechErrorHandler;
+
+    // Cleanup function
+    return () => {
+      Voice.destroy().then(Voice.removeAllListeners);
+    };
+  }, []);
+
+  // Implement voiceOnClick function
+  const voiceOnClick = async () => {
+    try {
+      // Reset states
+      setIsListening(true);
+      // Start listening
+      await Voice.start('English');
+      setIsListening(true);
+    } catch (e) {
+      console.error("Error starting voice recognition:", e);
+    }
+  };
+
+  // Implement stopListening function
+  const stopListening = async () => {
+    try {
+      await Voice.stop();
+      setIsListening(false);
+    } catch (e) {
+      console.error("Error stopping voice recognition:", e);
+    }
+  };
 
   return (
     <KeyboardAvoidingView

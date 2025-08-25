@@ -23,7 +23,7 @@ export const updateTask = async (task: TaskTypes) => {
         console.log(error);
         Toast.show({
             type: 'error',
-            text1: 'Something went wrong, please try again later',
+            text1: error?.response.data.message || 'Something went wrong, please try again later',
             autoHide: true,
         })
     }
@@ -51,7 +51,7 @@ export const createTask = async (task: any) => {
         console.log(error);
         Toast.show({
             type: 'error',
-            text1: 'Something went wrong, please try again later',
+            text1: error?.response.data.message || 'Something went wrong, please try again later',
             autoHide: true,
         })
     }

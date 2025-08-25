@@ -11,12 +11,13 @@ export const createEvent = async (eventData: any) => {
     }
 };
 
-export const getEvents = async (query: string, filter: string | null) => {
+export const getEvents = async (query: string, filter: string | null, month: null | number = null) => {
     try {
         const response = await axiosConnection.get('/events', {
             params: {
                 query,
                 filter,
+                month
             }
         });
         return response.data;

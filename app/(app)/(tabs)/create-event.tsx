@@ -166,7 +166,7 @@ const LocationModal = ({
 
                 {selectedLocation && (
                     <View style={styles.selectedLocationInfo}>
-                        <Text style={styles.selectedLocationText}>📍 {selectedLocation.address}</Text>
+                        <Text style={styles.selectedLocationText}>📍 {selectedLocation?.address}</Text>
                     </View>
                 )}
             </View>
@@ -293,11 +293,11 @@ function CreateEvent() {
                         setContacts([]);
                     }
                 } else {
-                    Alert.alert('No phone numbers found in your contacts.');
+                    // Alert.alert('No phone numbers found in your contacts.');
                     setContacts([]);
                 }
             } else {
-                Alert.alert('No contacts found on this device.');
+                // Alert.alert('No contacts found on this device.');
                 setContacts([]);
             }
         } catch (error) {
@@ -322,8 +322,7 @@ function CreateEvent() {
         attendees: Yup.array().of(Yup.string().email('Invalid email')),
     })
 
-    // event Id from query
-    const { eventId }: { eventId: string | undefined | any } = useLocalSearchParams();
+    const { eventId, date }: { eventId: string | undefined | any, date: any } = useLocalSearchParams();
 
     const fetchEvent = async () => {
         if (eventId) {
@@ -333,6 +332,37 @@ function CreateEvent() {
                     ...eventData,
                     startTime: new Date(eventData.startTime),
                     endTime: new Date(eventData.endTime),
+                });
+            }
+        } else {
+            if (date && typeof date === 'string') {
+                const selectedDate = new Date(date);
+                if (!isNaN(selectedDate.getTime())) {
+                    setFormValues({
+                        title: '',
+                        description: '',
+                        startTime: new Date(selectedDate.getTime() + 60 * 60 * 9000),
+                        endTime: new Date(selectedDate.getTime() + 60 * 60 * 10000),
+                        location: {
+                            address: '',
+                            latitude: 0,
+                            longitude: 0,
+                        },
+                        attendees: [],
+                    });
+                }
+            } else {
+                setFormValues({
+                    title: '',
+                    description: '',
+                    startTime: new Date(),
+                    endTime: new Date(),
+                    location: {
+                        address: '',
+                        latitude: 0,
+                        longitude: 0,
+                    },
+                    attendees: [],
                 });
             }
         }
@@ -423,6 +453,7 @@ function CreateEvent() {
             setSelectedLocation({ coordinates, address });
         }
     };
+
 
     return (
         <KeyboardAvoidingView
@@ -643,16 +674,16 @@ function CreateEvent() {
                                 >
                                     <View style={styles.locationButtonContent}>
                                         <Text style={styles.locationButtonText}>
-                                            {values.location.address || 'Select event location'}
+                                            {values?.location?.address || 'Select event location'}
                                         </Text>
                                         <Text style={{ color: '#9ca3af', fontSize: 16 }}>📍</Text>
                                     </View>
                                 </TouchableOpacity>
 
-                                {values.location.address && (
+                                {values?.location?.address && (
                                     <View style={styles.locationPreview}>
                                         <Text style={styles.locationPreviewText}>
-                                            📍 {values.location.address}
+                                            📍 {values?.location?.address}
                                         </Text>
                                         <TouchableOpacity
                                             onPress={() => setFieldValue('location', { address: '', latitude: 0, longitude: 0 })}
@@ -663,8 +694,8 @@ function CreateEvent() {
                                     </View>
                                 )}
 
-                                {touched.location?.address && errors.location?.address && (
-                                    <Text style={styles.errorText}>{errors.location.address}</Text>
+                                {touched?.location?.address && errors?.location?.address && (
+                                    <Text style={styles.errorText}>{errors?.location?.address}</Text>
                                 )}
                             </View>
 
