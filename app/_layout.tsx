@@ -3,6 +3,7 @@ import { AuthProvider, useAuth } from "@/app/context/AuthContext";
 import { useEffect } from "react";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 import Toast from "react-native-toast-message";
+import 'react-native-get-random-values';
 
 const InitialLayout = () => {
   const { token, initialized } = useAuth();

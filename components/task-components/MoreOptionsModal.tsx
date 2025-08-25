@@ -1,57 +1,100 @@
 import { TaskTypes } from '@/constants/types';
-import { deleteTask } from '@/services/task-services';
+import { deleteTask, updateTask } from '@/services/task-services';
 import React from 'react'
-import { Dimensions, FlatList, Modal, Pressable, StyleSheet, Text, TouchableOpacity, TouchableWithoutFeedback, View } from 'react-native';
+import { Alert, Dimensions, FlatList, Modal, Pressable, StyleSheet, Text, TouchableOpacity, TouchableWithoutFeedback, View } from 'react-native';
 import Toast from 'react-native-toast-message';
+import CollapsibleListItem from '../CollapsibleListItem';
+import { MaterialIcons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router'
 
 const { width: screenWidth } = Dimensions.get('window');
 
 function MoreOptionsModal(
-    { moreOptionsModal, setMoreOptionsModal, selectedTask, setReRender, buttonPosition, setPriorityModal, setNestedPopupPosition }
-        : { moreOptionsModal: boolean, setMoreOptionsModal: React.Dispatch<React.SetStateAction<boolean>>, selectedTask: TaskTypes | null, setReRender: React.Dispatch<React.SetStateAction<boolean>>, buttonPosition: { x: number, y: number, width: number, height: number }, setPriorityModal: React.Dispatch<React.SetStateAction<boolean>>, setNestedPopupPosition: React.Dispatch<React.SetStateAction<any>> }
+    { moreOptionsModal, setMoreOptionsModal, selectedTask, setReRender, buttonPosition }
+        : { moreOptionsModal: boolean, setMoreOptionsModal: React.Dispatch<React.SetStateAction<boolean>>, selectedTask: TaskTypes | null, setReRender: React.Dispatch<React.SetStateAction<boolean>>, buttonPosition: { x: number, y: number, width: number, height: number } }
 ) {
+
+    const router = useRouter();
 
     const handleOptionClick = async (item: { label: string, value: string }, event) => {
         if (item.value === 'edit') {
-            Toast.show({
-                type: 'info',
-                text1: 'This feature is coming soon!',
-                autoHide: true,
-            });
-        } else if (item.value === 'delete') {
-            if (selectedTask && selectedTask._id) {
-                const res = await deleteTask(selectedTask._id);
-                if (res.status) {
-                    Toast.show({
-                        type: 'success',
-                        text1: 'Task deleted successfully',
-                        autoHide: true,
-                    });
-                    setMoreOptionsModal(false);
-                    setReRender((prev) => !prev);
-                } else {
-                    Toast.show({
-                        type: 'error',
-                        text1: 'Something went wrong',
-                        autoHide: true,
-                    });
-                }
-            }
-        } else if (item.value === 'change_priority') {
-            event.target.measure((x: number, y: number, width: number, height: number, pageX: number, pageY: number) => {
-                setNestedPopupPosition({ x: pageX, y: pageY, width, height })
-            });
-            setPriorityModal(true);
             setMoreOptionsModal(false);
+            if (selectedTask && selectedTask._id) {
+                router.push(`/create-task?taskId=${selectedTask._id}`);
+            } else {
+                Toast.show({
+                    type: 'error',
+                    text1: 'Something went wrong',
+                    autoHide: true,
+                });
+            }
+        } else if (item.value === 'delete') {
+            Alert.alert(
+                'Delete Task',
+                'Are you sure you want to delete this task?',
+                [
+                    {
+                        text: 'Cancel',
+                        style: 'cancel',
+                    },
+                    {
+                        text: 'Delete',
+                        onPress: handleDelete,
+                        style: 'destructive',
+                    },
+                ]
+            )
         }
     }
 
-    const handleLayout = (event: any) => {
-        // Capture the layout of THIS menu item
-        event.target.measure((x: number, y: number, width: number, height: number, pageX: number, pageY: number) => {
-            setLayout({ x: pageX, y: pageY, width, height });
-        });
-    };
+    const getPriorityIcon = (priority: string) => {
+        switch (priority) {
+            case 'low': return 'keyboard-arrow-down'
+            case 'medium': return 'horizontal-rule'
+            case 'high': return 'keyboard-arrow-up'
+            default: return 'low-priority'
+        }
+    }
+
+    const handlePriorityIconRender = (priority: string) => {
+        switch (priority) {
+            case 'high':
+                return (<MaterialIcons name="keyboard-arrow-up" size={24} color="orange" />);
+            case 'medium':
+                return (<MaterialIcons name="horizontal-rule" size={24} color="blue" />);
+            case 'low':
+                return (<MaterialIcons name="keyboard-arrow-down" size={24} color="gray" />);
+            default:
+                return (<MaterialIcons name="help-outline" size={24} color="gray" />);
+        }
+    }
+
+    const handleDelete = async () => {
+        if (selectedTask && selectedTask._id) {
+            const res = await deleteTask(selectedTask._id);
+            if (res.status) {
+                Toast.show({
+                    type: 'success',
+                    text1: 'Task deleted successfully',
+                    autoHide: true,
+                });
+                setMoreOptionsModal(false);
+                setReRender((prev) => !prev);
+            } else {
+                Toast.show({
+                    type: 'error',
+                    text1: 'Something went wrong',
+                    autoHide: true,
+                });
+            }
+        } else {
+            Toast.show({
+                type: 'error',
+                text1: 'Something went wrong',
+                autoHide: true,
+            });
+        }
+    }
 
     return (
         <>
@@ -69,15 +112,15 @@ function MoreOptionsModal(
                         style={{
                             ...styles.popoverMenuMoreOptions,
                             top: buttonPosition.y + buttonPosition.height + 5, // 5px below the button
-                            left: buttonPosition.x - 150 + buttonPosition.width / 2, // Adjust to roughly center/align with button
+                            left: buttonPosition.x - 180 + buttonPosition.width / 2, // Adjust to roughly center/align with button
                             right: buttonPosition.x + buttonPosition.width < screenWidth / 2 ? 'auto' : 20, // Example: Adjust based on screen edge
                         }}
                     >
                         <FlatList
                             data={[
-                                { label: 'Edit', value: 'edit' },
-                                { label: 'Delete', value: 'delete' },
-                                { label: 'Change Priority', value: 'change_priority' },
+                                { label: 'Edit', value: 'edit', icon: 'edit' },
+                                { label: 'Delete', value: 'delete', icon: 'delete' },
+                                { label: 'Change Priority', value: 'change_priority', icon: getPriorityIcon(selectedTask?.priority) },
                             ]}
                             keyExtractor={(item) => item.value}
                             renderItem={({ item }) => (
@@ -85,7 +128,50 @@ function MoreOptionsModal(
                                     style={styles.dropdownItem}
                                     onPress={(event) => handleOptionClick(item, event)}
                                 >
-                                    <Text style={styles.dropdownItemText}>{item.label}</Text>
+                                    {
+                                        item.value === 'change_priority' ? (
+                                            <CollapsibleListItem title={item.label}>
+                                                <FlatList
+                                                    data={[
+                                                        { label: 'High', value: 'high' },
+                                                        { label: 'Medium', value: 'medium' },
+                                                        { label: 'Low', value: 'low' },
+                                                    ].filter(item => item?.value !== selectedTask?.priority)}
+                                                    keyExtractor={(item) => item.value}
+                                                    renderItem={({ item }) => (
+                                                        <TouchableOpacity
+                                                            style={styles.dropdownItem}
+                                                            onPress={async () => {
+                                                                if (selectedTask && selectedTask.title) {
+                                                                    const updatedTask = { ...selectedTask, priority: item.value };
+                                                                    const res = await updateTask(updatedTask);
+                                                                    if (res.status) {
+                                                                        Toast.show({
+                                                                            type: 'success',
+                                                                            text1: 'Updated priority successfully',
+                                                                            autoHide: true,
+                                                                        });
+                                                                        setMoreOptionsModal(false);
+                                                                        setReRender((prev) => !prev);
+                                                                    } else {
+                                                                        Toast.show({
+                                                                            type: 'error',
+                                                                            text1: 'Something went wrong',
+                                                                            autoHide: true,
+                                                                        });
+                                                                    }
+                                                                }
+                                                            }}
+                                                        >
+                                                            <Text style={styles.dropdownItemText}>{item.label}  {handlePriorityIconRender(item.value)}</Text>
+                                                        </TouchableOpacity>
+                                                    )}
+                                                />
+                                            </CollapsibleListItem>
+                                        ) : (
+                                            <Text style={styles.dropdownItemText}>{item.label}</Text>
+                                        )
+                                    }
                                 </TouchableOpacity>
                             )}
                         />
@@ -108,7 +194,7 @@ const styles = StyleSheet.create({
         backgroundColor: '#fff',
         borderRadius: 8,
         padding: 10,
-        width: 180,
+        width: 200,
         elevation: 5,
     },
     dropdownItem: {

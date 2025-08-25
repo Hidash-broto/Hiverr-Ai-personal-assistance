@@ -16,17 +16,22 @@ export const login = async (formData: { email: string, password: string }) => {
     }
 };
 
-export const signup = async ({ name = '', email = '', password = '' }: { name: string, email: string, password: string }) => {
+export const signup = async ({ name = '', email = '', password = '', mobile = '' }: { name: string, email: string, password: string, mobile: string }) => {
     try {
         const response = await axiosConnection.post('/user/signup', {
             name,
             email,
             password,
+            mobile,
         });
 
         return response.data;
-    } catch (error) {
+    } catch (error: any) {
         console.error('Signup error:', error);
-        throw error;
+        Toast.show({
+            type: 'error',
+            text1: 'Signup Failed',
+            text2: error.response?.data?.message || 'Please try again later.',
+        });
     }
 };

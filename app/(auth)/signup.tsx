@@ -9,10 +9,10 @@ import toast from 'react-native-toast-message';
 function Signup() {
   const { saveToken } = useAuth();
   const router = useRouter();
-  const [formData, setFormData] = useState({ name: '', email: '', password: '' });
+  const [formData, setFormData] = useState({ name: '', email: '', password: '', mobile: '' });
 
   const handleSignup = async () => {
-    if (!formData.name.trim() || !formData.email.trim() || !formData.password.trim()) {
+    if (!formData.name.trim() || !formData.email.trim() || !formData.password.trim() || !formData.mobile.trim()) {
       toast.show({
         type: 'error',
         text1: 'Signup Failed',
@@ -93,6 +93,14 @@ function Signup() {
               placeholder='Password'
               placeholderTextColor='grey'
               secureTextEntry={true}
+            />
+            <TextInput
+              value={formData.mobile}
+              style={styles.input}
+              onChangeText={(value) => handleChange('mobile', value)}
+              placeholder='Mobile Number'
+              placeholderTextColor='grey'
+              keyboardType='phone-pad'
             />
             <TouchableOpacity onPress={handleSignup} style={styles.button}>
               <Text style={styles.buttonText}>Signup</Text>
